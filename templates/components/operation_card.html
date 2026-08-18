@@ -1,0 +1,52 @@
+<details class="operation-card operation-{{ operation.kind }}" data-operation-kind="{{ operation.kind }}" data-operation-status="{{ operation.span.status }}">
+  <summary>
+    <span class="operation-icon kind-{{ operation.kind }}">{% if operation.kind == 'tool' %}⌘{% elif operation.kind == 'external' %}↗{% elif operation.kind == 'model' %}✦{% else %}•{% endif %}</span>
+    <span class="operation-main"><small>{{ operation.label }}</small>{% if operation.endpoint %}<strong class="operation-request-line"><span class="http-method">{{ operation.method }}</span><span class="operation-endpoint">{{ operation.endpoint }}</span></strong>{% else %}<strong>{{ operation.title }}</strong>{% endif %}<em>{{ operation.summary }}</em></span>
+    <span class="operation-duration mono">{{ operation.span.duration_ms|floatformat:1|default:"—" }} ms</span>
+    {% include "components/status_badge.html" with status=operation.span.status %}
+    <span class="chevron">⌄</span>
+  </summary>
+  <div class="operation-detail">
+    {% if operation.exchanges %}
+      <div class="exchange-list {% if operation.exchanges|length == 2 %}exchange-pair{% endif %}">
+        {% for exchange in operation.exchanges %}
+          <section class="exchange-card exchange-{{ exchange.role }}">
+            <div class="exchange-kicker"><span>{{ exchange.role }}</span><small>{{ exchange.label }}</small></div>
+            <header>
+              <span>{{ exchange.sender }}</span>
+              <b>→</b>
+              <span>{{ exchange.receiver }}</span>
+              {% if exchange.meta %}<small>{{ exchange.meta }}</small>{% endif %}
+            </header>
+            {% if exchange.fields %}
+              <dl class="exchange-fields">
+                {% for field in exchange.fields %}<div><dt>{{ field.name }}</dt><dd>{{ field.value }}</dd></div>{% endfor %}
+              </dl>
+            {% endif %}
+            <details class="exchange-raw">
+              <summary><span>View JSON</span><span class="chevron">⌄</span></summary>
+              <div class="json-code-shell">
+                <button class="json-copy" type="button" data-copy-json aria-label="Copy JSON">Copy</button>
+                <pre class="json-viewer">{{ exchange.raw }}</pre>
+              </div>
+            </details>
+          </section>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if operation.fields and not operation.exchanges %}
+      <dl class="payload-fields">
+        {% for field in operation.fields %}<div><dt>{{ field.name }}</dt><dd>{{ field.value }}</dd></div>{% endfor %}
+      </dl>
+    {% endif %}
+    {% if not operation.exchanges %}
+      <div class="developer-payload">
+        <div><span>Developer details</span><small>{{ operation.raw_label }}</small></div>
+        <div class="json-code-shell">
+          <button class="json-copy" type="button" data-copy-json aria-label="Copy JSON">Copy</button>
+          <pre class="json-viewer">{{ operation.raw }}</pre>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</details>

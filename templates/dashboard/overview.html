@@ -1,0 +1,82 @@
+{% extends "layouts/base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">System summary</p>
+    <h1>See the entire MCP flow at a glance.</h1>
+    <p>Sessions, tools, Jotform API calls, cost, and data quality on one trace.</p>
+  </div>
+  <a class="button" href="{% url 'session-list' %}">Explore sessions <span>→</span></a>
+</div>
+
+<div class="metric-grid">
+  <article class="metric-card">
+    <p>Total sessions <span>◎</span></p>
+    <strong>{{ session_count }}</strong>
+    <small>{{ event_count }} raw events processed</small>
+  </article>
+  <article class="metric-card">
+    <p>Success rate <span class="positive">↗</span></p>
+    <strong>{{ success_rate }}%</strong>
+    <small>based on terminal session status</small>
+  </article>
+  <article class="metric-card accent">
+    <p>p95 total duration <span>⌁</span></p>
+    <strong>{{ p95_duration_ms|floatformat:0 }}<em> ms</em></strong>
+    <small>end-to-end session latency</small>
+  </article>
+  <article class="metric-card">
+    <p>Known cost <span>$</span></p>
+    <strong>${{ total_cost_usd|floatformat:4 }}</strong>
+    <small>{{ cost_coverage }}% pricing coverage</small>
+  </article>
+</div>
+
+<div class="split-grid wide-left">
+  <article class="panel">
+    <div class="panel-head"><div><p class="eyebrow">Traffic</p><h2>Session activity</h2></div><span class="muted">daily</span></div>
+    <div id="activity-chart" class="chart" aria-label="Daily session activity chart"></div>
+  </article>
+  <article class="panel finding-summary">
+    <div class="panel-head"><div><p class="eyebrow">Needs attention</p><h2>Open findings</h2></div><strong class="count-bubble">{{ open_findings }}</strong></div>
+    {% for finding in top_findings %}
+      <a class="finding-row" href="{% url 'session-detail' finding.session_id %}"><span class="severity severity-{{ finding.severity }}"></span><div><strong>{{ finding.display_title }}</strong><small>{{ finding.rule_code }} · {{ finding.wasted_ms|floatformat:0 }} ms estimated waste</small></div><span>→</span></a>
+    {% empty %}<div class="empty">There are no open findings.</div>{% endfor %}
+  </article>
+</div>
+
+<article class="panel flush">
+  <div class="panel-head padded"><div><p class="eyebrow">Latency</p><h2>Slowest sessions</h2></div><a href="{% url 'session-list' %}">View all →</a></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Session</th><th>Provider / model</th><th>Status</th><th>Started</th><th class="num">Total duration</th></tr></thead>
+    <tbody>{% for session in slow_sessions %}<tr><td><a class="mono-link" href="{% url 'session-detail' session.id %}">{{ session.display_name }}</a></td><td>{{ session.provider|default:"—" }} <span class="muted">/ {{ session.model|default:"—" }}</span></td><td>{% include "components/status_badge.html" with status=session.status %}</td><td>{{ session.started_at|date:"d M Y H:i:s"|default:"—" }}</td><td class="num mono">{{ session.duration_ms|floatformat:0 }} ms</td></tr>{% empty %}<tr><td colspan="5" class="empty">Sessions will appear here after the first data is ingested.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</article>
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const activity = {{ timeseries_json|safe }};
+    const element = document.getElementById('activity-chart');
+    const chart = echarts.init(element);
+    const draw = () => {
+      const styles = getComputedStyle(document.documentElement);
+      const text = styles.getPropertyValue('--muted').trim();
+      const line = styles.getPropertyValue('--line').trim();
+      const orange = styles.getPropertyValue('--orange').trim();
+      chart.setOption({
+        backgroundColor: 'transparent',
+        grid: {left: 34, right: 16, top: 20, bottom: 24},
+        tooltip: {trigger: 'axis', backgroundColor: styles.getPropertyValue('--surface').trim(), borderColor: line, textStyle: {color: styles.getPropertyValue('--text').trim(), fontSize: 12}},
+        xAxis: {type: 'category', data: activity.map(x => x.day), boundaryGap: false, axisLine: {lineStyle: {color: line}}, axisTick: {show: false}, axisLabel: {color: text, fontSize: 11}},
+        yAxis: {type: 'value', splitLine: {lineStyle: {color: line}}, axisLabel: {color: text, fontSize: 11}},
+        series: [{type: 'line', smooth: true, data: activity.map(x => x.count), symbol: 'circle', symbolSize: 6, lineStyle: {width: 2.5, color: orange}, itemStyle: {color: orange, borderColor: '#fff', borderWidth: 2}, areaStyle: {color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: 'rgba(255,97,0,.22)'}, {offset: 1, color: 'rgba(255,97,0,0)'}]}}}]
+      }, true);
+    };
+    draw();
+    addEventListener('resize', () => chart.resize());
+    addEventListener('pulse-theme-change', draw);
+  })();
+</script>
+{% endblock %}

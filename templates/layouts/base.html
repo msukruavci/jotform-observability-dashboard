@@ -1,0 +1,91 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff6100">
+  <title>{% block title %}Pulse{% endblock %} · Jotform MCP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    (function () {
+      const stored = localStorage.getItem('pulse-theme');
+      if (stored) document.documentElement.dataset.theme = stored;
+    })();
+  </script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.6"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app-shell">
+    <div class="sidebar-scrim" data-sidebar-close></div>
+    <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
+      <div class="sidebar-top">
+        <a class="brand" href="{% url 'overview' %}" aria-label="Jotform Pulse home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-copy"><strong>Jotform <b>Pulse</b></strong><small>MCP observability</small></span>
+        </a>
+        <button class="icon-button sidebar-close" type="button" data-sidebar-close aria-label="Close menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <nav>
+        <p class="nav-label">Monitor</p>
+        <a class="{% if active_nav == 'overview' %}active{% endif %}" href="{% url 'overview' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Overview</span></a>
+        <a class="{% if active_nav == 'sessions' %}active{% endif %}" href="{% url 'session-list' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span>Sessions</span></a>
+        <a class="{% if active_nav == 'tools' %}active{% endif %}" href="{% url 'tool-intelligence' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5 5L3.5 17.5a2.1 2.1 0 0 0 3 3l6.2-6.2a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"/></svg><span>Tool intelligence</span></a>
+        <p class="nav-label">Improve</p>
+        <a class="{% if active_nav == 'findings' %}active{% endif %}" href="{% url 'findings' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-4 12.7V19h8v-3.3A7 7 0 0 0 12 3Z"/><path d="M9 22h6M9 15h6"/></svg><span>Findings</span></a>
+        <a class="{% if active_nav == 'costs' %}active{% endif %}" href="{% url 'costs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16 8.5c-.8-.7-2-1-3.5-1-1.9 0-3.5.9-3.5 2.5s1.5 2.1 3.5 2.5S16 13.4 16 15s-1.6 2.5-3.5 2.5c-1.5 0-2.8-.4-3.8-1.2M12 5.5v13"/></svg><span>Cost</span></a>
+        <p class="nav-label">System</p>
+        <a class="{% if active_nav == 'data-health' %}active{% endif %}" href="{% url 'data-health' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3l2-7 4 13 2-6h5"/></svg><span>Data health</span></a>
+        <a href="{% url 'admin:index' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1-1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>Administration</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="health-mark"><i></i></span>
+        <div><strong>Data stream active</strong><small>Synced every 5 seconds</small></div>
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button menu-button" type="button" data-sidebar-open aria-label="Open menu" aria-controls="app-sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+          <div class="workspace-title"><span>Workspace</span><strong>Jotform Workflow MCP</strong></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="sync-state"><i></i><span>Live</span><small>5 sec</small></div>
+          <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+            <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+          </button>
+        </div>
+      </header>
+      <section class="content" id="main-content">
+        {% if messages %}{% for message in messages %}<div class="notice" role="status"><span>✓</span>{{ message }}</div>{% endfor %}{% endif %}
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const body = document.body;
+      document.querySelectorAll('[data-sidebar-open]').forEach(button => button.addEventListener('click', () => body.classList.add('sidebar-open')));
+      document.querySelectorAll('[data-sidebar-close]').forEach(button => button.addEventListener('click', () => body.classList.remove('sidebar-open')));
+      document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+        const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next;
+        localStorage.setItem('pulse-theme', next);
+        window.dispatchEvent(new CustomEvent('pulse-theme-change', {detail: next}));
+      });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape') body.classList.remove('sidebar-open'); });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

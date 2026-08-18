@@ -1,0 +1,30 @@
+{% extends "layouts/base.html" %}
+{% block title %}Tool intelligence{% endblock %}
+{% block content %}
+<div class="page-head compact"><div><p class="eyebrow">Behavior analysis</p><h1>Tool intelligence</h1><p>Compare call frequency, tail latency, error rate, and result size for every tool.</p></div></div>
+<article class="panel"><div class="panel-head"><div><p class="eyebrow">Latency profile</p><h2>Call volume and p95 duration</h2></div></div><div id="tool-chart" class="chart tall" aria-label="Tool call volume and latency chart"></div></article>
+<article class="panel flush"><div class="table-wrap"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">p50</th><th class="num">p95</th><th class="num">Error rate</th><th class="num">Avg. response</th><th class="num">Findings</th></tr></thead><tbody>{% for tool in tool_metrics %}<tr><td><strong class="mono">{{ tool.name }}</strong></td><td class="num">{{ tool.count }}</td><td class="num mono">{{ tool.p50|floatformat:1 }} ms</td><td class="num mono">{{ tool.p95|floatformat:1 }} ms</td><td class="num">{{ tool.error_rate }}%</td><td class="num">{{ tool.avg_result_bytes }} B</td><td class="num">{{ tool.findings }}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No tool data is available yet.</td></tr>{% endfor %}</tbody></table></div></article>
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const rows = {{ chart_json|safe }};
+    const chart = echarts.init(document.getElementById('tool-chart'));
+    const draw = () => {
+      const s = getComputedStyle(document.documentElement);
+      const muted = s.getPropertyValue('--muted').trim();
+      const line = s.getPropertyValue('--line').trim();
+      chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {trigger: 'axis', axisPointer: {type: 'shadow'}, backgroundColor: s.getPropertyValue('--surface').trim(), borderColor: line, textStyle: {color: s.getPropertyValue('--text').trim(), fontSize: 12}},
+        grid: {left: 160, right: 55, top: 25, bottom: 35},
+        legend: {textStyle: {color: muted, fontSize: 11}},
+        xAxis: [{type: 'value', name: 'calls', nameTextStyle: {color: muted}, axisLabel: {color: muted, fontSize: 11}, axisLine: {show: false}, splitLine: {lineStyle: {color: line}}}, {type: 'value', name: 'p95 ms', nameTextStyle: {color: muted}, axisLabel: {color: muted, fontSize: 11}, splitLine: {show: false}}],
+        yAxis: {type: 'category', data: rows.map(x => x.name).reverse(), axisTick: {show: false}, axisLine: {lineStyle: {color: line}}, axisLabel: {color: muted, fontFamily: 'IBM Plex Mono', fontSize: 11}},
+        series: [{name: 'Calls', type: 'bar', data: rows.map(x => x.count).reverse(), barMaxWidth: 18, itemStyle: {color: '#ff6100', borderRadius: [0, 5, 5, 0]}}, {name: 'p95 ms', type: 'line', xAxisIndex: 1, data: rows.map(x => x.p95).reverse(), symbolSize: 6, lineStyle: {width: 2, color: '#3f6ad8'}, itemStyle: {color: '#3f6ad8'}}]
+      }, true);
+    };
+    draw(); addEventListener('resize', () => chart.resize()); addEventListener('pulse-theme-change', draw);
+  })();
+</script>
+{% endblock %}

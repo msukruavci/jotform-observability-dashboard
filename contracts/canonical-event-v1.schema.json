@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jotform.local/schemas/canonical-event-v1.json",
+  "title": "Jotform MCP Canonical Telemetry Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "workspace_id", "session_id", "trace_id", "span_id", "sequence_no", "event_name", "timestamp", "status", "attributes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "event_id": {"type": "string", "format": "uuid"},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": ["string", "null"]},
+    "session_id": {"type": "string", "minLength": 1},
+    "turn_id": {"type": ["string", "null"]},
+    "model_step_id": {"type": ["string", "null"]},
+    "trace_id": {"type": "string", "minLength": 1},
+    "span_id": {"type": "string", "minLength": 1},
+    "parent_span_id": {"type": ["string", "null"]},
+    "request_id": {"type": ["string", "null"]},
+    "sequence_no": {"type": "integer", "minimum": 0},
+    "event_name": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]+\\.(started|completed|failed)$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": ["number", "null"], "minimum": 0},
+    "status": {"enum": ["running", "ok", "error", "cancelled", "abandoned", "unknown"]},
+    "attributes": {"type": "object"}
+  }
+}
+

@@ -1,0 +1,33 @@
+<div id="session-results"
+     class="session-results"
+     hx-get="{{ request.get_full_path }}"
+     hx-trigger="every 5s"
+     hx-target="this"
+     hx-swap="outerHTML">
+  <div class="live-strip">
+    <span><i></i> Live list</span>
+    <small>New MCP data refreshes automatically every 5 seconds.</small>
+  </div>
+  <article class="panel flush">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Session</th><th>Type</th><th>Provider / model</th><th>Status</th><th>Correlation</th><th class="num">Turns</th><th class="num">Operations</th><th class="num">Duration</th></tr></thead>
+      <tbody>
+        {% for session in page_obj %}
+          <tr>
+            <td data-label="Session"><a class="session-cell" href="{% url 'session-detail' session.id %}"><span class="trace-icon">◎</span><span><strong class="mono">{{ session.display_name }}</strong><small>{% if session.ended_at %}Last activity · {{ session.ended_at|date:"d M, H:i:s" }}{% elif session.started_at %}Started · {{ session.started_at|date:"d M, H:i:s" }}{% else %}No timestamp{% endif %}</small></span></a></td>
+            <td data-label="Type">{% if session.turn_count %}<span class="session-kind kind-chat">Conversation</span>{% else %}<span class="session-kind kind-mcp">MCP activity</span>{% endif %}</td>
+            <td data-label="Provider / model">{{ session.provider|default:"MCP" }}<small class="block muted">{{ session.model|default:"tool/API traffic" }}</small></td>
+            <td data-label="Status">{% include "components/status_badge.html" with status=session.status %}</td>
+            <td data-label="Correlation"><span class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</span></td>
+            <td class="num" data-label="Turn">{{ session.turn_count }}</td>
+            <td class="num" data-label="Operations">{{ session.span_count }}</td>
+            <td class="num mono" data-label="Duration">{{ session.duration_ms|floatformat:0|default:"—" }} ms</td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty" colspan="8">No traceable sessions match these filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </article>
+  {% include "components/pagination.html" %}
+</div>

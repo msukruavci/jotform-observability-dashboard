@@ -1,0 +1,15 @@
+{% extends "layouts/base.html" %}
+{% block title %}Sessions{% endblock %}
+{% block content %}
+<div class="page-head compact">
+  <div><p class="eyebrow">Trace explorer</p><h1>Sessions</h1><p>Inspect conversations and direct MCP tool/API activity, starting with the latest event.</p></div>
+</div>
+<form class="filter-bar" method="get" role="search">
+  <input name="q" value="{{ request.GET.q }}" aria-label="Search sessions" placeholder="Search session, model, or question…">
+  <select name="status" aria-label="Filter by status"><option value="">All statuses</option><option {% if request.GET.status == 'ok' %}selected{% endif %}>ok</option><option {% if request.GET.status == 'error' %}selected{% endif %}>error</option><option {% if request.GET.status == 'running' %}selected{% endif %}>running</option><option {% if request.GET.status == 'unknown' %}selected{% endif %}>unknown</option></select>
+  <select name="provider" aria-label="Filter by provider"><option value="">All providers</option>{% for item in providers %}<option value="{{ item }}" {% if request.GET.provider == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+  <select name="tool" aria-label="Filter by tool"><option value="">All tools</option>{% for item in tools %}<option value="{{ item }}" {% if request.GET.tool == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
+  <button type="submit">Apply filters</button><a href="{% url 'session-list' %}">Clear</a>
+</form>
+{% include "sessions/_results.html" %}
+{% endblock %}

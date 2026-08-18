@@ -1,0 +1,128 @@
+{% extends "layouts/base.html" %}
+{% load core_extras %}
+{% block title %}Session {{ session.display_name }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'session-list' %}">← Back to sessions</a>
+<div class="page-head compact session-title"><div><p class="eyebrow">Session details</p><h1><span class="mono">{{ session.external_session_id }}</span></h1><p>{{ session.provider|default:"unknown" }} / {{ session.model|default:"model unknown" }} · {{ session.started_at|date:"d M Y H:i:s T" }}</p></div>{% include "components/status_badge.html" with status=session.status %}</div>
+<div class="metric-strip"><div><span>Total duration</span><strong>{{ session.duration_ms|floatformat:1|default:"—" }} ms</strong></div><div><span>Turns</span><strong>{{ session.turns.count }}</strong></div><div><span>Spans</span><strong>{{ session.spans.count }}</strong></div><div><span>Findings</span><strong>{{ findings.count }}</strong></div><div><span>Correlation confidence</span><strong class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</strong></div></div>
+
+<article class="panel conversation-panel {% if not conversation %}mcp-only-panel{% endif %}">
+  <div class="panel-head conversation-head">
+    <div><p class="eyebrow">{% if conversation %}Conversation and operations{% else %}MCP operations{% endif %}</p><h2>{% if conversation %}Conversation history{% else %}Operation activity{% endif %}</h2></div>
+    <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ unassigned_operations|length }} operations{% endif %}</span>
+  </div>
+  <div class="conversation-toolbar" aria-label="Operation view controls">
+    <div class="operation-filters" role="group" aria-label="Operation type">
+      <button class="operation-filter active" type="button" data-operation-filter="all">All</button>
+      <button class="operation-filter" type="button" data-operation-filter="tool">MCP tool</button>
+      <button class="operation-filter" type="button" data-operation-filter="external">Jotform API</button>
+      <button class="operation-filter" type="button" data-operation-filter="model">Model</button>
+      <button class="operation-filter" type="button" data-operation-filter="error">Errors</button>
+    </div>
+    <div class="operation-actions">
+      <button class="operation-action" type="button" data-operation-expand>Expand all</button>
+      <button class="operation-action" type="button" data-operation-collapse>Collapse all</button>
+    </div>
+  </div>
+  <div class="conversation-stream">
+    {% for item in conversation %}
+      <div class="turn-divider"><span>Turn {{ item.turn.sequence_no }}</span><i></i><small>{{ item.turn.started_at|date:"H:i:s" }} · {{ item.turn.duration_ms|floatformat:0 }} ms</small></div>
+      <div class="chat-message user-message">
+        <div class="chat-avatar user-avatar">S</div>
+        <div class="chat-body">
+          <div class="chat-meta"><strong>You</strong><span>User request</span></div>
+          <div class="message-text">{{ item.turn.question|default:"Question text was not recorded." }}</div>
+        </div>
+      </div>
+
+      {% if item.operations %}
+        <div class="agent-activity">
+          <div class="activity-rail"><span></span></div>
+          <div class="activity-content">
+            <div class="activity-title"><span class="pulse-icon">✦</span><strong>Agent activity</strong><small>{{ item.operations|length }} operations</small></div>
+            {% for operation in item.operations %}
+              {% include "components/operation_card.html" %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="chat-message assistant-message">
+        <div class="chat-avatar assistant-avatar">P</div>
+        <div class="chat-body">
+          <div class="chat-meta"><strong>Jotform MCP Agent</strong><span>{{ session.model|default:"Assistant" }}</span></div>
+          <div class="message-text assistant-text markdown-body">{{ item.turn.answer|default:"Response text was not recorded."|conversation_markdown }}</div>
+          <div class="message-foot">
+            <span>{{ item.turn.input_tokens|default:"?" }} input token</span>
+            <span>{{ item.turn.output_tokens|default:"?" }} output token</span>
+            {% if item.turn.cost_usd != None %}<span>${{ item.turn.cost_usd }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      {% if unassigned_operations %}
+        <div class="mcp-only-intro"><span class="operation-icon kind-tool">⌘</span><div><h3>MCP activity only</h3><p>No conversation text was provided by the client. The latest {{ unassigned_operations|length }} tool and API operations are shown below.</p></div></div>
+        <div class="mcp-operation-list">
+          {% for operation in unassigned_operations %}{% include "components/operation_card.html" %}{% endfor %}
+        </div>
+      {% else %}
+        <div class="conversation-empty"><span>◎</span><h3>No traceable activity in this session</h3><p>The session ID exists, but no conversation, tool, or HTTP operation has been linked yet.</p></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</article>
+
+<div class="split-grid trace-layout">
+  <article class="panel"><div class="panel-head"><div><p class="eyebrow">Critical path</p><h2>Execution timeline</h2></div><span class="legend"><i class="model-color"></i> model <i class="tool-color"></i> tool <i class="external-color"></i> http</span></div>
+    <div class="waterfall-head"><span>Operation</span><span>0</span><span>time →</span><span>{{ session.duration_ms|floatformat:0 }} ms</span></div>
+    <div class="waterfall">{% for item in waterfall %}<div class="waterfall-row"><div class="span-name depth-{{ item.span.parent_id|yesno:'1,0' }}"><span class="kind-dot kind-{{ item.span.kind }}"></span><span><strong>{{ item.span.name }}</strong><small>{{ item.span.kind }} · {{ item.span.status }}</small></span></div><div class="track"><span class="bar kind-{{ item.span.kind }} status-{{ item.span.status }}" style="left:{{ item.offset_pct|stringformat:'.3f' }}%;width:{{ item.width_pct|stringformat:'.3f' }}%"></span></div><div class="span-time mono">{{ item.span.duration_ms|floatformat:1|default:"—" }} ms</div></div>{% empty %}<div class="empty">No normalized spans were found for this session.</div>{% endfor %}</div>
+  </article>
+  <aside class="panel trace-findings"><div class="panel-head"><div><p class="eyebrow">Rule engine</p><h2>Findings</h2></div></div>{% for finding in findings %}<details class="finding-card" {% if finding.status == 'open' %}open{% endif %}><summary><span class="severity severity-{{ finding.severity }}"></span><span><strong>{{ finding.display_title }}</strong><small>{{ finding.confidence }} confidence · {{ finding.wasted_ms|floatformat:0 }} ms</small></span></summary><p>{{ finding.display_description }}</p><div class="recommendation"><strong>Recommendation</strong>{{ finding.display_recommendation }}</div><form method="post">{% csrf_token %}<input type="hidden" name="finding_id" value="{{ finding.id }}"><button name="action" value="accepted">Accept</button><button class="ghost" name="action" value="false_positive">False positive</button></form></details>{% empty %}<div class="empty">No findings for this session.</div>{% endfor %}</aside>
+</div>
+<details class="panel developer-panel">
+  <summary><span class="code-icon">{ }</span><span><strong>Raw telemetry</strong><small>Source JSON events for debugging</small></span><span class="muted">{{ raw_events|length }} events</span><span class="chevron">⌄</span></summary>
+  <div class="developer-events">
+    {% for item in raw_events %}<details class="raw-event"><summary><span class="mono">{{ item.event.occurred_at|date:"H:i:s.u" }}</span><strong>{{ item.event.event_type }}</strong><span class="confidence confidence-{{ item.event.correlation_confidence }}">{{ item.event.correlation_confidence }}</span></summary><pre class="json-viewer">{{ item.pretty_payload }}</pre></details>{% empty %}<div class="empty">No raw events match this session ID.</div>{% endfor %}
+  </div>
+</details>
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const cards = [...document.querySelectorAll('.operation-card')];
+    const filters = [...document.querySelectorAll('[data-operation-filter]')];
+    const applyFilter = filter => {
+      cards.forEach(card => {
+        const matches = filter === 'all' || card.dataset.operationKind === filter || (filter === 'error' && card.dataset.operationStatus === 'error');
+        card.classList.toggle('is-filtered', !matches);
+      });
+      filters.forEach(button => {
+        const active = button.dataset.operationFilter === filter;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+    };
+    filters.forEach(button => button.addEventListener('click', () => applyFilter(button.dataset.operationFilter)));
+    document.querySelector('[data-operation-expand]')?.addEventListener('click', () => cards.filter(card => !card.classList.contains('is-filtered')).forEach(card => card.open = true));
+    document.querySelector('[data-operation-collapse]')?.addEventListener('click', () => cards.forEach(card => card.open = false));
+
+    const escapeHtml = value => value.replace(/[&<>]/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[character]));
+    const jsonPattern = /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    document.querySelectorAll('.json-viewer').forEach(viewer => {
+      const raw = viewer.textContent;
+      viewer.dataset.raw = raw;
+      viewer.innerHTML = escapeHtml(raw).replace(jsonPattern, (token, key, string, boolean, nullValue, number) => {
+        const type = key ? 'key' : string ? 'string' : boolean ? 'boolean' : nullValue ? 'null' : 'number';
+        return `<span class="json-${type}">${token}</span>`;
+      });
+    });
+    document.querySelectorAll('[data-copy-json]').forEach(button => button.addEventListener('click', async () => {
+      const viewer = button.closest('.json-code-shell')?.querySelector('.json-viewer');
+      if (!viewer) return;
+      await navigator.clipboard.writeText(viewer.dataset.raw || viewer.textContent);
+      button.textContent = 'Copied';
+      setTimeout(() => { button.textContent = 'Copy'; }, 1400);
+    }));
+  })();
+</script>
+{% endblock %}
