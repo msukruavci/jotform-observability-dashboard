@@ -5,8 +5,10 @@ import json
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Q, Sum
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse
+from django.utils import timezone
+from django.views import View
 from django.views.generic import DetailView, TemplateView
 
 from apps.findings.models import Annotation, Finding
@@ -15,6 +17,15 @@ from apps.traces.models import Session, Span, ToolCall, Turn
 
 from .metrics import cost_by_model, overview_metrics, session_timeseries, tool_metrics
 from .presentation import operation_card, pretty_payload
+from .template_analytics import (
+    filter_templates,
+    get_cross_similarity_analysis_data,
+    get_mcp_template_invocations,
+    get_template_by_id,
+    get_template_charts_data,
+    get_templates_overview_metrics,
+)
+
 
 
 class OverviewView(TemplateView):
@@ -59,7 +70,7 @@ class SessionListView(TemplateView):
         paginator = Paginator(query.order_by(
             F("ended_at").desc(nulls_last=True),
             F("started_at").desc(nulls_last=True),
-        ), 25)
+        ), 50)
         context["page_obj"] = paginator.get_page(params.get("page"))
         context["providers"] = Session.objects.exclude(provider="").values_list("provider", flat=True).distinct().order_by("provider")
         context["models"] = Session.objects.exclude(model="").values_list("model", flat=True).distinct().order_by("model")
@@ -118,13 +129,18 @@ class SessionDetailView(DetailView):
             {"turn": turn, "operations": operations_by_turn.get(turn.id, [])}
             for turn in session.turns.all()
         ]
-        context["unassigned_operations"] = [
+        all_unassigned = [
             operation_card(span, raw_events_by_request.get(span.request_id)) for span in spans if not span.turn_id
-        ][-50:]
+        ]
+        op_paginator = Paginator(all_unassigned, 50)
+        op_page_obj = op_paginator.get_page(self.request.GET.get("op_page"))
+        context["total_operations_count"] = len(all_unassigned)
+        context["unassigned_operations"] = op_page_obj.object_list
+        context["operations_page_obj"] = op_page_obj
         context["findings"] = session.findings.select_related("span", "turn").order_by("-created_at")
         context["raw_events"] = [
             {"event": event, "pretty_payload": pretty_payload(event.payload)}
-            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at")[:50]
+            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at")
         ]
         context["active_nav"] = "sessions"
         return context
@@ -154,7 +170,7 @@ class FindingsView(TemplateView):
             findings = findings.filter(severity=self.request.GET["severity"])
         if self.request.GET.get("rule"):
             findings = findings.filter(rule_code=self.request.GET["rule"])
-        context["page_obj"] = Paginator(findings.order_by("-created_at"), 30).get_page(self.request.GET.get("page"))
+        context["page_obj"] = Paginator(findings.order_by("-created_at"), 50).get_page(self.request.GET.get("page"))
         context["rule_codes"] = Finding.objects.values_list("rule_code", flat=True).distinct()
         context["active_nav"] = "findings"
         return context
@@ -179,8 +195,344 @@ class DataHealthView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["sources"] = IngestionSource.objects.annotate(quarantine_count=Count("quarantined_events")).order_by("-last_seen_at")
-        context["quarantined"] = QuarantinedEvent.objects.select_related("source").order_by("-created_at")[:30]
+        context["quarantined"] = QuarantinedEvent.objects.select_related("source").order_by("-created_at")[:50]
         context["event_count"] = RawEvent.objects.count()
         context["high_correlation"] = RawEvent.objects.filter(correlation_confidence="high").count()
         context["active_nav"] = "data-health"
         return context
+
+
+class TemplateIntelligenceView(TemplateView):
+    template_name = "templates/index.html"
+
+    def get_template_names(self):
+        target = self.request.GET.get("target")
+        if self.request.headers.get("HX-Request") == "true":
+            if target == "invocations_table":
+                return ["templates/_invocations_table.html"]
+            if target in ("table", "catalog_table"):
+                return ["templates/_table_rows.html"]
+            if target == "analysis_pairs_table":
+                return ["templates/_analysis_pairs_table.html"]
+        return super().get_template_names()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        active_tab = self.request.GET.get("tab", "invocations")
+        if active_tab not in ("invocations", "analysis", "catalog"):
+            active_tab = "invocations"
+
+        # 1. Invocations filter & pagination
+        inv_q = self.request.GET.get("inv_q", "")
+        inv_tool = self.request.GET.get("inv_tool", "")
+        try:
+            inv_page = int(self.request.GET.get("inv_page", 1))
+        except (ValueError, TypeError):
+            inv_page = 1
+
+        invocations_result = get_mcp_template_invocations(
+            query_filter=inv_q,
+            tool_filter=inv_tool,
+            page=inv_page,
+            per_page=12,
+        )
+
+        # 2. Similarity & Uniqueness Analysis
+        selected_bucket = self.request.GET.get("bucket", "")
+        try:
+            an_page = int(self.request.GET.get("an_page", 1))
+        except (ValueError, TypeError):
+            an_page = 1
+
+        analysis_result = get_cross_similarity_analysis_data(
+            selected_bucket=selected_bucket,
+            page=an_page,
+            per_page=15,
+        )
+
+        # 3. Catalog filter & pagination
+        q = self.request.GET.get("q", "")
+        category = self.request.GET.get("category", "")
+        sort_by = self.request.GET.get("sort", "clones_desc")
+        try:
+            page = int(self.request.GET.get("page", 1))
+        except (ValueError, TypeError):
+            page = 1
+
+        overview = get_templates_overview_metrics()
+        charts_data = get_template_charts_data()
+        table_result = filter_templates(
+            query=q,
+            category=category,
+            sort_by=sort_by,
+            page=page,
+            per_page=15,
+        )
+
+        context.update(overview)
+        context["charts_json"] = json.dumps(charts_data)
+        context["templates_page"] = table_result
+        context["current_q"] = q
+        context["current_category"] = category
+        context["current_sort"] = sort_by
+
+        context["active_tab"] = active_tab
+        context["invocations_page"] = invocations_result
+        context["inv_stats"] = invocations_result.get("stats", {})
+        context["inv_q"] = inv_q
+        context["inv_tool"] = inv_tool
+        context["inv_page"] = inv_page
+
+        context["analysis_data"] = analysis_result
+        context["analysis_json"] = json.dumps({
+            "buckets": analysis_result.get("buckets", []),
+            "stats": {
+                "total_pairs": analysis_result.get("total_pairs", 0),
+                "min": analysis_result.get("min_similarity", 0.0),
+                "max": analysis_result.get("max_similarity", 0.0),
+                "mean": analysis_result.get("mean_similarity", 0.0),
+                "median": analysis_result.get("median_similarity", 0.0),
+                "std_dev": analysis_result.get("std_dev", 0.0),
+            }
+        })
+        context["selected_bucket"] = analysis_result.get("selected_bucket", "")
+
+        context["active_nav"] = "templates"
+        return context
+
+
+class TemplateDetailModalView(TemplateView):
+    template_name = "templates/_detail_modal.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        template_id = self.kwargs.get("template_id", "")
+        template = get_template_by_id(template_id)
+        context["template"] = template
+        if template:
+            context["pretty_snapshot"] = json.dumps(
+                {"elements": template.get("elements", []), "links": template.get("links", [])},
+                indent=2,
+                ensure_ascii=False,
+            )
+        return context
+
+
+class SessionExportPDFView(TemplateView):
+    """Clean, print-optimized standalone HTML report for PDF export."""
+    template_name = "sessions/export_report.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session_id = self.kwargs.get("pk")
+        session = Session.objects.get(pk=session_id)
+        spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
+        origin = session.started_at or next((span.started_at for span in spans if span.started_at), None)
+        
+        waterfall = []
+        measured_total = max(
+            (
+                (span.ended_at - origin).total_seconds() * 1000
+                if origin and span.ended_at
+                else float(span.duration_ms or 0)
+            )
+            for span in spans
+        ) if spans else 0
+        total = max(float(session.duration_ms or measured_total or 1), 1)
+        for span in spans:
+            offset = (span.started_at - origin).total_seconds() * 1000 if origin and span.started_at else 0
+            waterfall.append({"span": span, "offset_pct": max(offset / total * 100, 0), "width_pct": max(float(span.duration_ms or 1) / total * 100, .35)})
+
+        request_ids = {span.request_id for span in spans if span.request_id}
+        raw_events_by_request: dict[str, list[dict]] = {}
+        if request_ids:
+            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at", "id"):
+                request_id = event.payload.get("request_id")
+                if request_id in request_ids:
+                    raw_events_by_request.setdefault(request_id, []).append(event.payload)
+
+        operations_by_turn = {}
+        for span in spans:
+            if span.turn_id:
+                operations_by_turn.setdefault(span.turn_id, []).append(operation_card(span, raw_events_by_request.get(span.request_id)))
+
+        context["session"] = session
+        context["waterfall"] = waterfall
+        context["conversation"] = [
+            {"turn": turn, "operations": operations_by_turn.get(turn.id, [])}
+            for turn in session.turns.all()
+        ]
+        context["unassigned_operations"] = [
+            operation_card(span, raw_events_by_request.get(span.request_id)) for span in spans if not span.turn_id
+        ]
+        context["findings"] = session.findings.select_related("span", "turn").order_by("-created_at")
+        return context
+
+
+class SessionExportJSONView(View):
+    """Exports complete structured session trace as a JSON file attachment."""
+
+    def get(self, request, pk):
+        session = Session.objects.get(pk=pk)
+        spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
+        
+        request_ids = {span.request_id for span in spans if span.request_id}
+        raw_events = list(RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at", "id"))
+        raw_events_by_request: dict[str, list[dict]] = {}
+        for event in raw_events:
+            request_id = event.payload.get("request_id")
+            if request_id:
+                raw_events_by_request.setdefault(request_id, []).append(event.payload)
+
+        turns_data = []
+        for turn in session.turns.all():
+            turn_spans = [s for s in spans if s.turn_id == turn.id]
+            turn_ops = [operation_card(s, raw_events_by_request.get(s.request_id)) for s in turn_spans]
+            turns_data.append({
+                "sequence_no": turn.sequence_no,
+                "started_at": turn.started_at.isoformat() if turn.started_at else None,
+                "duration_ms": turn.duration_ms,
+                "question": turn.question,
+                "answer": turn.answer,
+                "input_tokens": turn.input_tokens,
+                "output_tokens": turn.output_tokens,
+                "cost_usd": float(turn.cost_usd) if turn.cost_usd is not None else None,
+                "operations": [
+                    {
+                        "name": op.get("title"),
+                        "kind": op.get("kind"),
+                        "status": op.get("span").status,
+                        "duration_ms": op.get("span").duration_ms,
+                        "fields": op.get("fields", []),
+                        "exchanges": op.get("exchanges", []),
+                        "raw": op.get("raw"),
+                    }
+                    for op in turn_ops
+                ],
+            })
+
+        unassigned_spans = [s for s in spans if not s.turn_id]
+        unassigned_ops = [
+            {
+                "name": op.get("title"),
+                "kind": op.get("kind"),
+                "status": op.get("span").status,
+                "duration_ms": op.get("span").duration_ms,
+                "fields": op.get("fields", []),
+                "exchanges": op.get("exchanges", []),
+                "raw": op.get("raw"),
+            }
+            for op in [operation_card(s, raw_events_by_request.get(s.request_id)) for s in unassigned_spans]
+        ]
+
+        findings_data = [
+            {
+                "rule_code": f.rule_code,
+                "severity": f.severity,
+                "status": f.status,
+                "title": f.display_title,
+                "description": f.display_description,
+                "recommendation": f.display_recommendation,
+                "confidence": f.confidence,
+                "wasted_ms": f.wasted_ms,
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+            }
+            for f in session.findings.all()
+        ]
+
+        export_payload = {
+            "meta": {
+                "exporter": "Jotform MCP Observability Suite",
+                "version": "1.0",
+                "exported_at": timezone.now().isoformat(),
+            },
+            "session": {
+                "id": str(session.id),
+                "external_session_id": session.external_session_id,
+                "provider": session.provider,
+                "model": session.model,
+                "status": session.status,
+                "started_at": session.started_at.isoformat() if session.started_at else None,
+                "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+                "duration_ms": session.duration_ms,
+                "correlation_confidence": session.correlation_confidence,
+                "turns_count": session.turns.count(),
+                "spans_count": len(spans),
+                "findings_count": len(findings_data),
+            },
+            "conversation": turns_data,
+            "unassigned_operations": unassigned_ops,
+            "findings": findings_data,
+            "raw_events": [e.payload for e in raw_events],
+        }
+
+        short_id = session.external_session_id[:12] if session.external_session_id else str(session.id)[:8]
+        response = HttpResponse(
+            json.dumps(export_payload, indent=2, ensure_ascii=False, default=str),
+            content_type="application/json; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="jotform_mcp_session_{short_id}.json"'
+        return response
+
+
+class SessionExportMarkdownView(View):
+    """Exports structured markdown summary of the session."""
+
+    def get(self, request, pk):
+        session = Session.objects.get(pk=pk)
+        spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
+        
+        request_ids = {span.request_id for span in spans if span.request_id}
+        raw_events_by_request: dict[str, list[dict]] = {}
+        if request_ids:
+            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at", "id"):
+                request_id = event.payload.get("request_id")
+                if request_id in request_ids:
+                    raw_events_by_request.setdefault(request_id, []).append(event.payload)
+
+        lines = [
+            f"# Jotform MCP Session Report: `{session.external_session_id}`",
+            "",
+            "## Summary",
+            f"- **Provider / Model**: `{session.provider or 'MCP'}` / `{session.model or 'Direct'}`",
+            f"- **Status**: `{session.status}`",
+            f"- **Duration**: `{session.duration_ms or 0:.0f} ms`",
+            f"- **Turns**: `{session.turns.count()}`",
+            f"- **Total Operations**: `{len(spans)}`",
+            f"- **Started**: `{session.started_at.strftime('%Y-%m-%d %H:%M:%S') if session.started_at else '—'}`",
+            "",
+        ]
+
+        if session.turns.exists():
+            lines.append("## Conversation & Workflow Flow")
+            for turn in session.turns.all():
+                lines.append(f"### Turn #{turn.sequence_no}")
+                lines.append(f"**User Prompt:**\n> {turn.question}\n")
+                
+                turn_spans = [s for s in spans if s.turn_id == turn.id]
+                if turn_spans:
+                    lines.append("#### MCP Operations:")
+                    for s in turn_spans:
+                        card = operation_card(s, raw_events_by_request.get(s.request_id))
+                        lines.append(f"- **{card['title']}** (`{s.kind}`, {s.duration_ms or 0:.1f}ms, {s.status}):")
+                        for ex in card.get("exchanges", []):
+                            lines.append(f"  - *{ex['label']}*:\n```json\n{ex['raw']}\n```")
+                    lines.append("")
+                
+                if turn.answer:
+                    lines.append(f"**Agent Answer:**\n\n{turn.answer}\n")
+                lines.append("---")
+
+        unassigned_spans = [s for s in spans if not s.turn_id]
+        if unassigned_spans:
+            lines.append("## Standalone MCP Operations")
+            for s in unassigned_spans:
+                card = operation_card(s, raw_events_by_request.get(s.request_id))
+                lines.append(f"- **{card['title']}** (`{s.kind}`, {s.duration_ms or 0:.1f}ms, {s.status})")
+
+        short_id = session.external_session_id[:12] if session.external_session_id else str(session.id)[:8]
+        response = HttpResponse("\n".join(lines), content_type="text/markdown; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="jotform_mcp_session_{short_id}.md"'
+        return response
+
+

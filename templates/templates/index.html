@@ -1,0 +1,654 @@
+{% extends "layouts/base.html" %}
+{% block title %}Template Intelligence &amp; Analysis{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Catalog, Invocations &amp; Semantic Cross-Analysis</p>
+    <h1>Workflow Template Intelligence</h1>
+    <p>MCP oturumlarında yapılan şablon aramaları, vektör benzerlik matrisi (27.028 çift), 0.05 uniqueness aralıkları ve global 300+ şablon kataloğu.</p>
+  </div>
+</div>
+
+<!-- Triple Navigation Tabs -->
+<nav class="tab-nav">
+  <button
+    type="button"
+    class="tab-btn {% if active_tab == 'invocations' %}active{% endif %}"
+    id="tab-btn-invocations"
+    data-tab="invocations"
+    onclick="switchTab('invocations')"
+  >
+    <span>🔍 MCP Oturum &amp; Sorgu Analizi</span>
+    <span class="tab-badge">{{ inv_stats.total_invocations|default:0 }}</span>
+  </button>
+  <button
+    type="button"
+    class="tab-btn {% if active_tab == 'analysis' %}active{% endif %}"
+    id="tab-btn-analysis"
+    data-tab="analysis"
+    onclick="switchTab('analysis')"
+  >
+    <span>📊 Çapraz Benzerlik &amp; Uniqueness Analizi</span>
+    <span class="tab-badge">{{ analysis_data.total_pairs|default:27028 }} çift</span>
+  </button>
+  <button
+    type="button"
+    class="tab-btn {% if active_tab == 'catalog' %}active{% endif %}"
+    id="tab-btn-catalog"
+    data-tab="catalog"
+    onclick="switchTab('catalog')"
+  >
+    <span>🌐 Global Şablon Kataloğu</span>
+    <span class="tab-badge">{{ total_templates|default:0 }}</span>
+  </button>
+</nav>
+
+<!-- ================= PANE 1: MCP INVOCATIONS & RETRIEVAL ================= -->
+<div id="tab-pane-invocations" class="tab-pane {% if active_tab == 'invocations' %}active{% endif %}">
+  <!-- Invocations KPI Cards -->
+  <div class="metric-grid">
+    <article class="metric-card accent">
+      <p>Toplam Şablon Çağrısı <span>🔍</span></p>
+      <strong>{{ inv_stats.total_invocations|default:0 }}</strong>
+      <small>{{ inv_stats.total_searches|default:0 }} arama sorgusu, {{ inv_stats.total_inspections|default:0 }} blueprint inceleme</small>
+    </article>
+    <article class="metric-card">
+      <p>Önerilen Tekil Şablonlar <span class="positive">✦</span></p>
+      <strong>{{ inv_stats.unique_retrieved_count|default:0 }}</strong>
+      <small>oturumlarımızda eşleşen benzersiz şablon</small>
+    </article>
+    <article class="metric-card">
+      <p>Ortalama RAG Eşleşme Skoru <span>⌁</span></p>
+      <strong>{{ inv_stats.avg_similarity_score|default:"0.0" }}</strong>
+      <small>vektör kosinüs benzerlik ortalaması</small>
+    </article>
+    <article class="metric-card">
+      <p>Detay İnceleme (get_template) <span>🔬</span></p>
+      <strong>{{ inv_stats.total_inspections|default:0 }}</strong>
+      <small>derinlemesine blueprint analizi</small>
+    </article>
+  </div>
+
+  <!-- Top Retrieved in Our Sessions Spotlight Widget -->
+  {% if inv_stats.top_retrieved %}
+  <section class="top-retrieved-panel">
+    <div class="panel-head" style="margin-bottom: 4px; padding: 0;">
+      <div>
+        <p class="eyebrow">En Çok Önerilen Şablonlar</p>
+        <h3 style="margin: 0; font-size: 15px; color: var(--ink);">Bizim MCP Oturumlarında En Çok Çekilen Şablonlar</h3>
+      </div>
+      <span class="muted" style="font-size: 12px;">Frekans Analizi</span>
+    </div>
+    <div class="top-retrieved-grid">
+      {% for item in inv_stats.top_retrieved %}
+        <div class="top-retrieved-card">
+          <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+            <strong class="top-retrieved-title" title="{{ item.title }}">{{ item.title }}</strong>
+            <span class="mono muted" style="font-size: 11px;">#{{ item.id }} · {{ item.category }}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="top-retrieved-count" title="Bizim oturumlarda {{ item.count }} kez önerildi">{{ item.count }}x</span>
+            <button
+              class="button secondary tiny"
+              type="button"
+              hx-get="{% url 'template-detail-modal' item.id %}"
+              hx-target="#modal-container"
+              hx-swap="innerHTML"
+              title="Inspect Blueprint"
+            >
+              ↗
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Invocations Table Panel -->
+  <article class="panel flush">
+    <div class="panel-head padded">
+      <div>
+        <p class="eyebrow">Sorgu &amp; Arama Geçmişi</p>
+        <h2>Oturumlarda Çekilen Şablonlar ve Yapılan Doğal Dil Aramaları</h2>
+      </div>
+      <span class="muted">{{ invocations_page.total_items }} kayıt</span>
+    </div>
+
+    <!-- Filter Toolbar for Invocations -->
+    <div class="filter-toolbar">
+      <div class="filter-group-left">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            type="text"
+            name="inv_q"
+            placeholder="Sorgu metni, Session ID, şablon başlığı veya ID ile ara..."
+            value="{{ inv_q }}"
+            hx-get="{% url 'template-intelligence' %}?target=invocations_table&tab=invocations"
+            hx-trigger="keyup changed delay:300ms"
+            hx-target="#invocations-table-container"
+            hx-swap="outerHTML"
+            hx-include="[name='inv_tool']"
+            class="table-search-input"
+            style="min-width: 320px;"
+          >
+        </div>
+
+        <select
+          name="inv_tool"
+          hx-get="{% url 'template-intelligence' %}?target=invocations_table&tab=invocations"
+          hx-trigger="change"
+          hx-target="#invocations-table-container"
+          hx-swap="outerHTML"
+          hx-include="[name='inv_q']"
+          class="filter-select"
+        >
+          <option value="" {% if not inv_tool %}selected{% endif %}>Tüm İşlemler (Arama + İnceleme)</option>
+          <option value="search" {% if inv_tool == 'search' %}selected{% endif %}>Sadece Şablon Aramaları (search_workflow_templates)</option>
+          <option value="inspection" {% if inv_tool == 'inspection' %}selected{% endif %}>Sadece Detay İncelemeleri (get_workflow_template)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Dynamic HTMX Invocations Table Partial -->
+    {% include "templates/_invocations_table.html" %}
+  </article>
+</div>
+
+<!-- ================= PANE 2: CROSS-TEMPLATE UNIQUENESS & SIMILARITY ================= -->
+<div id="tab-pane-analysis" class="tab-pane {% if active_tab == 'analysis' %}active{% endif %}">
+  <!-- Analysis Top KPI Metrics -->
+  <div class="metric-grid">
+    <article class="metric-card accent">
+      <p>Toplam Değerlendirilen Çift <span>🔢</span></p>
+      <strong>{{ analysis_data.total_pairs|default:27028 }}</strong>
+      <small>{{ analysis_data.total_templates|default:233 }} şablonun tüm çapraz $N \times (N-1)/2$ kombinasyonu</small>
+    </article>
+    <article class="metric-card">
+      <p>Ortalama Benzerlik (Cosine) <span>⌁</span></p>
+      <strong>{{ analysis_data.mean_similarity|default:"0.8047" }}</strong>
+      <small>medyan: {{ analysis_data.median_similarity|default:"0.8100" }} · std: {{ analysis_data.std_dev|default:"0.0489" }}</small>
+    </article>
+    <article class="metric-card">
+      <p>En Yüksek Benzerlik (Min Uniqueness) <span>🔥</span></p>
+      <strong>{{ analysis_data.max_similarity|default:"0.9808" }}</strong>
+      <small>en yakın iki şablon arasındaki benzerlik skoru</small>
+    </article>
+    <article class="metric-card">
+      <p>En Düşük Benzerlik (Max Uniqueness) <span>💎</span></p>
+      <strong>{{ analysis_data.min_similarity|default:"0.6042" }}</strong>
+      <small>tamamen farklı iki alan arasındaki minimum skor</small>
+    </article>
+  </div>
+
+  <!-- 0.05 Bin Distribution Histogram Chart Panel -->
+  <article class="panel">
+    <div class="panel-head padded">
+      <div>
+        <p class="eyebrow">0.05 Aralık Dağılım Eğrisi</p>
+        <h2>Şablon Çiftlerinin 0.05 Kosinüs Benzerlik Aralıklarına Göre Dağılımı</h2>
+      </div>
+      <span class="muted mono">20 Aralık [0.00 - 1.00]</span>
+    </div>
+    <div id="similarity-histogram-chart" class="chart" style="height: 320px;" aria-label="Similarity distribution histogram"></div>
+  </article>
+
+  <!-- Side-by-Side Highlights: Highest Similarity vs Highest Uniqueness -->
+  <div class="split-grid equal">
+    <!-- Panel 1: Highest Similarity Pairs -->
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow" style="color: var(--orange);">En Yüksek Benzerlik (Düşük Uniqueness)</p>
+          <h3 style="margin: 0; font-size: 15px;">Birbirine En Çok Benzeyen Şablon Çiftleri</h3>
+        </div>
+        <span class="score-badge score-high">Skor &gt; 0.96</span>
+      </div>
+      <div class="pair-highlights-list" style="padding: 12px 18px; display: flex; flex-direction: column; gap: 10px;">
+        {% for pair in analysis_data.most_similar_pairs %}
+          <div class="matched-template-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span class="score-badge score-high mono">Skor: {{ pair.score }}</span>
+              <div style="display: flex; gap: 4px;">
+                <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_a.id %}" hx-target="#modal-container" hx-swap="innerHTML">A ↗</button>
+                <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_b.id %}" hx-target="#modal-container" hx-swap="innerHTML">B ↗</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; font-size: 12px;">
+              <div><strong>A:</strong> {{ pair.template_a.title }} <span class="mono muted">#{{ pair.template_a.id }}</span></div>
+              <div><strong>B:</strong> {{ pair.template_b.title }} <span class="mono muted">#{{ pair.template_b.id }}</span></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    <!-- Panel 2: Highest Uniqueness Pairs -->
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow" style="color: var(--blue);">En Yüksek Uniqueness (Farklı Alanlar)</p>
+          <h3 style="margin: 0; font-size: 15px;">Birbirinden En Çok Ayrışan Şablon Çiftleri</h3>
+        </div>
+        <span class="score-badge score-low">Skor ~ 0.60</span>
+      </div>
+      <div class="pair-highlights-list" style="padding: 12px 18px; display: flex; flex-direction: column; gap: 10px;">
+        {% for pair in analysis_data.most_distinct_pairs %}
+          <div class="matched-template-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span class="score-badge score-low mono">Skor: {{ pair.score }}</span>
+              <div style="display: flex; gap: 4px;">
+                <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_a.id %}" hx-target="#modal-container" hx-swap="innerHTML">A ↗</button>
+                <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_b.id %}" hx-target="#modal-container" hx-swap="innerHTML">B ↗</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px; font-size: 12px;">
+              <div><strong>A:</strong> {{ pair.template_a.title }} <span class="mono muted">#{{ pair.template_a.id }}</span></div>
+              <div><strong>B:</strong> {{ pair.template_b.title }} <span class="mono muted">#{{ pair.template_b.id }}</span></div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
+
+  <!-- Bucket Explorer Table Panel -->
+  <article class="panel flush">
+    <div class="panel-head padded">
+      <div>
+        <p class="eyebrow">Aralık Tarayıcısı (Bucket Explorer)</p>
+        <h2>0.05 Kosinüs Benzerlik Aralığına Göre Şablon Çiftleri</h2>
+      </div>
+      <span class="muted">İnteraktif Filtre</span>
+    </div>
+
+    <!-- 0.05 Interval Selector Buttons -->
+    <div style="padding: 12px 20px; display: flex; gap: 8px; flex-wrap: wrap; background: var(--surface-soft); border-bottom: 1px solid var(--line);">
+      {% for b in analysis_data.buckets %}
+        {% if b.count > 0 %}
+          <button
+            type="button"
+            class="button {% if analysis_data.selected_bucket == b.key %}primary{% else %}secondary{% endif %} small mono bucket-filter-btn"
+            hx-get="{% url 'template-intelligence' %}?target=analysis_pairs_table&tab=analysis&bucket={{ b.key }}"
+            hx-target="#analysis-pairs-container"
+            hx-swap="outerHTML"
+            onclick="document.querySelectorAll('.bucket-filter-btn').forEach(btn => { btn.classList.remove('primary'); btn.classList.add('secondary'); }); this.classList.remove('secondary'); this.classList.add('primary');"
+          >
+            {{ b.label }}: <strong>{{ b.count }}</strong> <small>({{ b.percentage }}%)</small>
+          </button>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <!-- Dynamic HTMX Analysis Pairs Table Partial -->
+    {% include "templates/_analysis_pairs_table.html" %}
+  </article>
+</div>
+
+<!-- ================= PANE 3: GLOBAL CATALOG ================= -->
+<div id="tab-pane-catalog" class="tab-pane {% if active_tab == 'catalog' %}active{% endif %}">
+  <!-- Top Global KPI Cards -->
+  <div class="metric-grid">
+    <article class="metric-card">
+      <p>Toplam Şablon Sayısı <span>⊞</span></p>
+      <strong>{{ total_templates }}</strong>
+      <small>{{ total_categories }} farklı iş alanında indekslenmiş şablon</small>
+    </article>
+    <article class="metric-card">
+      <p>Global Klon / Kullanım <span class="positive">⚡</span></p>
+      <strong>{{ total_clones }}</strong>
+      <small>topluluk klonları &amp; aktif kullanım sayısı</small>
+    </article>
+    <article class="metric-card accent">
+      <p>Ort. Karmaşıklık Skoru <span>⌁</span></p>
+      <strong>{{ avg_complexity }}<em> pts</em></strong>
+      <small>ort. {{ avg_elements }} element ve karar düğümü</small>
+    </article>
+    <article class="metric-card">
+      <p>Ort. Benzersizlik Skoru <span>✦</span></p>
+      <strong>{{ avg_uniqueness }}</strong>
+      <small>vektör mesafesi &amp; şablon entropisi</small>
+    </article>
+  </div>
+
+  <!-- 2x2 Charts Grid -->
+  <div class="split-grid equal">
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Taksonomi</p>
+          <h2>Kategoriye Göre Şablon Dağılımı</h2>
+        </div>
+        <span class="muted">Dağılım</span>
+      </div>
+      <div id="category-chart" class="chart" style="height: 300px;" aria-label="Templates by category chart"></div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Global Popülarite</p>
+          <h2>En Çok Klonlanan Şablonlar</h2>
+        </div>
+        <span class="muted">Top 10</span>
+      </div>
+      <div id="popular-chart" class="chart" style="height: 300px;" aria-label="Top cloned workflows chart"></div>
+    </article>
+  </div>
+
+  <div class="split-grid equal">
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Mimari Matrisi</p>
+          <h2>Karmaşıklık vs. Benzersizlik</h2>
+        </div>
+        <span class="muted">Quadrant</span>
+      </div>
+      <div id="scatter-chart" class="chart" style="height: 300px;" aria-label="Complexity vs uniqueness scatter chart"></div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Akış Bileşenleri</p>
+          <h2>Adım &amp; Element Tipi Frekansı</h2>
+        </div>
+        <span class="muted">Tüm Şablonlar</span>
+      </div>
+      <div id="steptype-chart" class="chart" style="height: 300px;" aria-label="Step types frequency chart"></div>
+    </article>
+  </div>
+
+  <!-- Templates Explorer Table Panel -->
+  <article class="panel flush">
+    <div class="panel-head padded">
+      <div>
+        <p class="eyebrow">Katalog Tarayıcı</p>
+        <h2>İndekslenmiş Tüm Workflow Şablonları</h2>
+      </div>
+      <span class="muted">{{ total_templates }} şablon</span>
+    </div>
+
+    <!-- Search & Filter Toolbar -->
+    <div class="filter-toolbar">
+      <div class="filter-group-left">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            type="text"
+            name="q"
+            placeholder="Başlık, anahtar kelime, adım tipi veya etiket ile ara..."
+            value="{{ current_q }}"
+            hx-get="{% url 'template-intelligence' %}?target=table&tab=catalog"
+            hx-trigger="keyup changed delay:300ms"
+            hx-target="#templates-table-container"
+            hx-swap="outerHTML"
+            hx-include="[name='category'], [name='sort']"
+            class="table-search-input"
+          >
+        </div>
+
+        <select
+          name="category"
+          hx-get="{% url 'template-intelligence' %}?target=table&tab=catalog"
+          hx-trigger="change"
+          hx-target="#templates-table-container"
+          hx-swap="outerHTML"
+          hx-include="[name='q'], [name='sort']"
+          class="filter-select"
+        >
+          <option value="">Tüm Kategoriler ({{ total_categories }})</option>
+          {% for cat in categories_list %}
+            <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group-right">
+        <label class="sort-label">Sırala:
+          <select
+            name="sort"
+            hx-get="{% url 'template-intelligence' %}?target=table&tab=catalog"
+            hx-trigger="change"
+            hx-target="#templates-table-container"
+            hx-swap="outerHTML"
+            hx-include="[name='q'], [name='category']"
+            class="filter-select"
+          >
+            <option value="clones_desc" {% if current_sort == 'clones_desc' %}selected{% endif %}>En Popüler (Klon Sayısı ↓)</option>
+            <option value="complexity_desc" {% if current_sort == 'complexity_desc' %}selected{% endif %}>En Yüksek Karmaşıklık ↓</option>
+            <option value="complexity_asc" {% if current_sort == 'complexity_asc' %}selected{% endif %}>En Sade Akışlar ↑</option>
+            <option value="uniqueness_desc" {% if current_sort == 'uniqueness_desc' %}selected{% endif %}>En Benzersiz ↓</option>
+            <option value="elements_desc" {% if current_sort == 'elements_desc' %}selected{% endif %}>En Çok Adım İçeren ↓</option>
+            <option value="title_asc" {% if current_sort == 'title_asc' %}selected{% endif %}>Başlık (A-Z)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <!-- Dynamic HTMX Table Partial -->
+    {% include "templates/_table_rows.html" %}
+  </article>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Tab Switching Function (Instant Client-Side Switch + URL Sync + Chart Resize)
+  function switchTab(tabName, pushState = true) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      pane.classList.toggle('active', pane.id === `tab-pane-${tabName}`);
+    });
+    if (pushState) {
+      const url = new URL(window.location);
+      url.searchParams.set('tab', tabName);
+      window.history.pushState({}, '', url);
+    }
+    // Resize charts on switch
+    if (tabName === 'analysis' && window.histChart) {
+      setTimeout(() => window.histChart.resize(), 50);
+    }
+    if (tabName === 'catalog') {
+      setTimeout(() => {
+        window.catChart?.resize();
+        window.popChart?.resize();
+        window.scatterChart?.resize();
+        window.stepChart?.resize();
+      }, 50);
+    }
+  }
+
+  // Handle Browser Back/Forward navigation for tabs
+  window.addEventListener('popstate', () => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') || 'invocations';
+    switchTab(tab, false);
+  });
+
+  (() => {
+    // 1. Init Analysis Tab Histogram Chart
+    const histElem = document.getElementById('similarity-histogram-chart');
+    if (histElem) {
+      const anData = {{ analysis_json|safe }};
+      window.histChart = echarts.init(histElem);
+
+      const drawHistogram = () => {
+        const s = getComputedStyle(document.documentElement);
+        const muted = s.getPropertyValue('--muted').trim();
+        const line = s.getPropertyValue('--line').trim();
+        const text = s.getPropertyValue('--text').trim();
+        const surface = s.getPropertyValue('--surface').trim();
+
+        const buckets = anData.buckets || [];
+        window.histChart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            backgroundColor: surface,
+            borderColor: line,
+            textStyle: { color: text, fontSize: 12 },
+            formatter: (params) => {
+              const p = params[0];
+              const b = buckets[p.dataIndex];
+              return `<strong>Aralık: ${b.label}</strong><br/>Çift Sayısı: <b>${b.count.toLocaleString()}</b> çift<br/>Yüzde: <b>${b.percentage}%</b>`;
+            }
+          },
+          grid: { left: 55, right: 25, top: 25, bottom: 40 },
+          xAxis: {
+            type: 'category',
+            data: buckets.map(b => b.label),
+            axisLabel: { color: muted, fontSize: 10, rotate: 30 },
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: line } }
+          },
+          yAxis: {
+            type: 'value',
+            name: 'Çift Sayısı',
+            nameTextStyle: { color: muted, fontSize: 11 },
+            axisLabel: { color: muted, fontSize: 10 },
+            splitLine: { lineStyle: { color: line } }
+          },
+          series: [{
+            name: 'Şablon Çifti',
+            type: 'bar',
+            data: buckets.map(b => ({
+              value: b.count,
+              itemStyle: {
+                color: b.lower >= 0.90 ? '#ff6100' : (b.lower >= 0.75 ? '#3f6ad8' : '#16a3a3'),
+                borderRadius: [4, 4, 0, 0]
+              }
+            })),
+            barMaxWidth: 32,
+          }]
+        }, true);
+      };
+
+      drawHistogram();
+      window.addEventListener('resize', () => window.histChart.resize());
+      window.addEventListener('pulse-theme-change', drawHistogram);
+    }
+
+    // 2. Init Catalog Tab Charts
+    const catElem = document.getElementById('category-chart');
+    if (catElem) {
+      const data = {{ charts_json|safe }};
+      
+      window.catChart = echarts.init(catElem);
+      window.popChart = echarts.init(document.getElementById('popular-chart'));
+      window.scatterChart = echarts.init(document.getElementById('scatter-chart'));
+      window.stepChart = echarts.init(document.getElementById('steptype-chart'));
+
+      const drawCharts = () => {
+        const s = getComputedStyle(document.documentElement);
+        const muted = s.getPropertyValue('--muted').trim();
+        const line = s.getPropertyValue('--line').trim();
+        const text = s.getPropertyValue('--text').trim();
+        const surface = s.getPropertyValue('--surface').trim();
+
+        const palette = ['#ff6100', '#3f6ad8', '#16a3a3', '#7c5ac7', '#16845b', '#b56b00', '#c83c50', '#4f5d75', '#e07a5f'];
+
+        // Category Chart
+        window.catChart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}: <strong>{c}</strong> ({d}%)<br/><span style="font-size:11px;color:#888;">Total clones: {a}</span>',
+            backgroundColor: surface,
+            borderColor: line,
+            textStyle: { color: text, fontSize: 12 }
+          },
+          legend: { orient: 'vertical', right: 10, top: 'middle', textStyle: { color: muted, fontSize: 11 } },
+          series: [{
+            name: 'Clones',
+            type: 'pie',
+            radius: ['45%', '75%'],
+            center: ['35%', '50%'],
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 6, borderColor: surface, borderWidth: 2 },
+            label: { show: false },
+            data: data.categories.map((c, i) => ({
+              name: c.name,
+              value: c.value,
+              itemStyle: { color: palette[i % palette.length] }
+            }))
+          }]
+        }, true);
+
+        // Top Cloned Chart
+        const topReversed = [...data.top_cloned].reverse();
+        window.popChart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            backgroundColor: surface,
+            borderColor: line,
+            textStyle: { color: text, fontSize: 12 },
+            formatter: (params) => {
+              const p = params[0];
+              const item = topReversed[p.dataIndex];
+              return `<strong>${item.full_title}</strong><br/>Category: ${item.category}<br/>Clones: <b>${item.clone_count}</b><br/>Elements: ${item.elements_count}`;
+            }
+          },
+          grid: { left: 160, right: 30, top: 15, bottom: 25 },
+          xAxis: { type: 'value', axisLabel: { color: muted, fontSize: 10 }, splitLine: { lineStyle: { color: line } } },
+          yAxis: { type: 'category', data: topReversed.map(x => x.title), axisLabel: { color: muted, fontSize: 11 }, axisTick: { show: false }, axisLine: { lineStyle: { color: line } } },
+          series: [{ name: 'Clones', type: 'bar', data: topReversed.map(x => x.clone_count), barMaxWidth: 16, itemStyle: { color: '#ff6100', borderRadius: [0, 4, 4, 0] } }]
+        }, true);
+
+        // Scatter Matrix
+        window.scatterChart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'item',
+            backgroundColor: surface,
+            borderColor: line,
+            textStyle: { color: text, fontSize: 12 },
+            formatter: (param) => {
+              const d = param.data;
+              return `<strong>${d[3]}</strong><br/>Category: ${d[2]}<br/>Complexity: <b>${d[0]}</b><br/>Uniqueness: <b>${d[1]}</b><br/>Clones: ${d[4]}`;
+            }
+          },
+          grid: { left: 45, right: 25, top: 20, bottom: 35 },
+          xAxis: { type: 'value', name: 'Complexity', nameLocation: 'middle', nameGap: 22, nameTextStyle: { color: muted, fontSize: 11 }, axisLabel: { color: muted, fontSize: 10 }, splitLine: { lineStyle: { color: line } } },
+          yAxis: { type: 'value', name: 'Uniqueness', nameTextStyle: { color: muted, fontSize: 11 }, axisLabel: { color: muted, fontSize: 10 }, splitLine: { lineStyle: { color: line } } },
+          series: [{
+            name: 'Templates',
+            type: 'scatter',
+            symbolSize: (val) => Math.min(22, Math.max(7, Math.sqrt(val[4] || 1) * 2.5)),
+            data: data.scatter.map(d => [d.complexity, d.uniqueness, d.category, d.title, d.clones]),
+            itemStyle: { color: 'rgba(63, 106, 216, 0.75)', borderColor: '#3f6ad8', borderWidth: 1 }
+          }]
+        }, true);
+
+        // Step Types
+        const stepsReversed = [...data.step_types].reverse();
+        window.stepChart.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: surface, borderColor: line, textStyle: { color: text, fontSize: 12 } },
+          grid: { left: 140, right: 30, top: 15, bottom: 25 },
+          xAxis: { type: 'value', axisLabel: { color: muted, fontSize: 10 }, splitLine: { lineStyle: { color: line } } },
+          yAxis: { type: 'category', data: stepsReversed.map(x => x.name), axisLabel: { color: muted, fontSize: 11 }, axisTick: { show: false }, axisLine: { lineStyle: { color: line } } },
+          series: [{ name: 'Occurrences', type: 'bar', data: stepsReversed.map(x => x.count), barMaxWidth: 16, itemStyle: { color: '#16a3a3', borderRadius: [0, 4, 4, 0] } }]
+        }, true);
+      };
+
+      drawCharts();
+      window.addEventListener('resize', () => {
+        window.catChart?.resize();
+        window.popChart?.resize();
+        window.scatterChart?.resize();
+        window.stepChart?.resize();
+      });
+      window.addEventListener('pulse-theme-change', drawCharts);
+    }
+  })();
+</script>
+{% endblock %}

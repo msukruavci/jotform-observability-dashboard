@@ -29,9 +29,11 @@ services:
     env_file: .env
     environment:
       RUN_MIGRATIONS: "1"
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --reload
     ports:
-      - "8000:8000"
+      - "8090:8000"
     volumes:
+      - .:/app
       - ../jotform-workflow-mcp:/data/mcp:ro
     depends_on:
       db:
@@ -49,6 +51,7 @@ services:
     env_file: .env
     command: celery -A config worker --loglevel=INFO --concurrency=2
     volumes:
+      - .:/app
       - ../jotform-workflow-mcp:/data/mcp:ro
     depends_on:
       db:
@@ -63,6 +66,7 @@ services:
     env_file: .env
     command: celery -A config beat --loglevel=INFO
     volumes:
+      - .:/app
       - ../jotform-workflow-mcp:/data/mcp:ro
     depends_on:
       db:

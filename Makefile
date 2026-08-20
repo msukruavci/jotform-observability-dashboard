@@ -11,7 +11,7 @@ ingest:
 	.venv/bin/python manage.py ingest_logs
 
 run:
-	.venv/bin/python manage.py runserver
+	.venv/bin/python manage.py runserver 8090
 
 test:
 	.venv/bin/python manage.py test

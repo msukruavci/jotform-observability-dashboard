@@ -1,0 +1,105 @@
+<div id="analysis-pairs-container">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 60px;">#</th>
+          <th style="width: 130px;">Kosinüs Skoru</th>
+          <th>Şablon A (Kaynak Blueprint)</th>
+          <th>Şablon B (Karşılaştırılan Blueprint)</th>
+          <th class="num" style="width: 140px;">Hızlı İnceleme</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pair in analysis_data.pairs_page.items %}
+        <tr>
+          <td class="mono muted">{{ forloop.counter }}</td>
+          <td>
+            <span class="score-badge {% if pair.score >= 0.85 %}score-high{% elif pair.score >= 0.70 %}score-mid{% else %}score-low{% endif %}">
+              {{ pair.score }}
+            </span>
+          </td>
+          <td>
+            <div class="template-title-cell">
+              <strong>{{ pair.template_a.title }}</strong>
+              <div class="template-meta-line">
+                <span class="badge badge-category">{{ pair.template_a.category }}</span>
+                <span class="mono muted">#{{ pair.template_a.id }}</span>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="template-title-cell">
+              <strong>{{ pair.template_b.title }}</strong>
+              <div class="template-meta-line">
+                <span class="badge badge-category">{{ pair.template_b.category }}</span>
+                <span class="mono muted">#{{ pair.template_b.id }}</span>
+              </div>
+            </div>
+          </td>
+          <td class="num">
+            <div style="display: flex; gap: 4px; justify-content: flex-end;">
+              <button
+                class="button secondary tiny"
+                type="button"
+                hx-get="{% url 'template-detail-modal' pair.template_a.id %}"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                title="Şablon A'yı İncele"
+              >
+                A ↗
+              </button>
+              <button
+                class="button secondary tiny"
+                type="button"
+                hx-get="{% url 'template-detail-modal' pair.template_b.id %}"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                title="Şablon B'yi İncele"
+              >
+                B ↗
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="empty">Bu aralıkta ([{{ analysis_data.selected_bucket }}]) herhangi bir şablon çifti bulunamadı.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination for Analysis Bucket Pairs -->
+  <div class="pagination-bar">
+    <div class="pagination-info">
+      Bu aralıkta (<strong>{{ analysis_data.selected_bucket }}</strong>) toplam <strong>{{ analysis_data.pairs_page.total_items }}</strong> çift bulundu (Sayfa {{ analysis_data.pairs_page.page }} / {{ analysis_data.pairs_page.total_pages }})
+    </div>
+    <div class="pagination-controls">
+      {% if analysis_data.pairs_page.has_prev %}
+      <button
+        class="button secondary small"
+        hx-get="{% url 'template-intelligence' %}?target=analysis_pairs_table&tab=analysis&bucket={{ analysis_data.selected_bucket }}&an_page={{ analysis_data.pairs_page.prev_page }}"
+        hx-target="#analysis-pairs-container"
+        hx-swap="outerHTML"
+      >
+        ← Previous
+      </button>
+      {% endif %}
+
+      <span class="page-current mono">Page {{ analysis_data.pairs_page.page }}</span>
+
+      {% if analysis_data.pairs_page.has_next %}
+      <button
+        class="button secondary small"
+        hx-get="{% url 'template-intelligence' %}?target=analysis_pairs_table&tab=analysis&bucket={{ analysis_data.selected_bucket }}&an_page={{ analysis_data.pairs_page.next_page }}"
+        hx-target="#analysis-pairs-container"
+        hx-swap="outerHTML"
+      >
+        Next →
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>

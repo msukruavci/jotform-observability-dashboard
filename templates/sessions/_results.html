@@ -1,12 +1,12 @@
 <div id="session-results"
      class="session-results"
      hx-get="{{ request.get_full_path }}"
-     hx-trigger="every 5s"
+     hx-trigger="every 300s"
      hx-target="this"
      hx-swap="outerHTML">
   <div class="live-strip">
     <span><i></i> Live list</span>
-    <small>New MCP data refreshes automatically every 5 seconds.</small>
+    <small>New MCP data refreshes automatically every 5 minutes.</small>
   </div>
   <article class="panel flush">
     <div class="table-wrap"><table>

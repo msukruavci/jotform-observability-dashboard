@@ -1,0 +1,98 @@
+{% if template %}
+<div class="modal-backdrop" id="template-modal-backdrop" onclick="closeTemplateModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-tags">
+          <span class="badge badge-category">{{ template.category }}</span>
+          <span class="badge badge-subtle">ID: <code class="mono">{{ template.id }}</code></span>
+          <span class="badge badge-clones">⚡ {{ template.clone_count }} clones</span>
+        </div>
+        <h2>{{ template.title }}</h2>
+      </div>
+      <button class="icon-button" type="button" onclick="closeTemplateModal()" aria-label="Close modal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      {% if template.description %}
+      <p class="modal-desc">{{ template.description }}</p>
+      {% endif %}
+
+      <div class="stats-pills">
+        <div class="pill">
+          <span class="pill-label">Complexity</span>
+          <strong class="mono">{{ template.complexity_score }}</strong>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Uniqueness</span>
+          <strong class="mono">{{ template.uniqueness_score }}</strong>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Elements</span>
+          <strong class="mono">{{ template.elements_count }}</strong>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Connections</span>
+          <strong class="mono">{{ template.links_count }}</strong>
+        </div>
+      </div>
+
+      <!-- Step Flow Progression -->
+      <div class="flow-section">
+        <h3>Workflow Sequence</h3>
+        <div class="flow-steps">
+          {% for step in template.steps_summary %}
+            <div class="flow-step-node">
+              <span class="step-num">{{ forloop.counter }}</span>
+              <span class="step-label">{{ step }}</span>
+            </div>
+            {% if not forloop.last %}
+              <div class="flow-step-arrow">→</div>
+            {% endif %}
+          {% empty %}
+            <p class="muted">No explicit steps recorded in this snapshot.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Step Counts Breakdown -->
+      {% if template.step_counts %}
+      <div class="step-breakdown-section">
+        <h3>Component Breakdown</h3>
+        <div class="step-badges">
+          {% for key, count in template.step_counts.items %}
+            <span class="step-chip">
+              <strong>{{ count }}x</strong> {{ key|cut:"workflow_"|title }}
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Raw Blueprint JSON Snapshot -->
+      <div class="json-section">
+        <div class="json-header">
+          <h3>Blueprint JSON Snapshot</h3>
+          <button class="button secondary small" type="button" onclick="copySnapshotJson()">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="copy-btn-text">Copy JSON</span>
+          </button>
+        </div>
+        <pre class="json-view"><code id="snapshot-json-code">{{ pretty_snapshot }}</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="modal-backdrop" id="template-modal-backdrop" onclick="closeTemplateModal()">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>Template Not Found</h2>
+      <button class="icon-button" type="button" onclick="closeTemplateModal()">&times;</button>
+    </div>
+    <div class="modal-body"><p class="muted">The requested template could not be loaded from dataset.</p></div>
+  </div>
+</div>
+{% endif %}

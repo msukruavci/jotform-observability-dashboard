@@ -95,7 +95,7 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
     "ingest-mcp-logs": {
         "task": "apps.ingestion.tasks.ingest_configured_logs",
-        "schedule": float(os.environ.get("INGEST_INTERVAL_SECONDS", "5")),
+        "schedule": float(os.environ.get("INGEST_INTERVAL_SECONDS", "3")),
     }
 }
 MCP_LOG_ROOT = Path(os.environ.get("MCP_LOG_ROOT", BASE_DIR.parent / "jotform-workflow-mcp"))

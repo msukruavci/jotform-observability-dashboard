@@ -3,13 +3,36 @@
 {% block title %}Session {{ session.display_name }}{% endblock %}
 {% block content %}
 <a class="back-link" href="{% url 'session-list' %}">← Back to sessions</a>
-<div class="page-head compact session-title"><div><p class="eyebrow">Session details</p><h1><span class="mono">{{ session.external_session_id }}</span></h1><p>{{ session.provider|default:"unknown" }} / {{ session.model|default:"model unknown" }} · {{ session.started_at|date:"d M Y H:i:s T" }}</p></div>{% include "components/status_badge.html" with status=session.status %}</div>
+<div class="page-head compact session-title">
+  <div>
+    <p class="eyebrow">Session details</p>
+    <h1><span class="mono">{{ session.external_session_id }}</span></h1>
+    <p>{{ session.provider|default:"unknown" }} / {{ session.model|default:"model unknown" }} · {{ session.started_at|date:"d M Y H:i:s T" }}</p>
+  </div>
+  <div class="session-actions-wrapper">
+    <div class="export-btn-group">
+      <a class="button" href="{% url 'session-export-pdf-view' session.id %}" target="_blank" title="Open printable report / Export as PDF">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>PDF Raporu</span>
+      </a>
+      <a class="button secondary" href="{% url 'session-export-json' session.id %}" download title="Download full trace as JSON">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>JSON İndir</span>
+      </a>
+      <a class="button secondary" href="{% url 'session-export-markdown' session.id %}" download title="Download summary as Markdown">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span>Markdown</span>
+      </a>
+    </div>
+    {% include "components/status_badge.html" with status=session.status %}
+  </div>
+</div>
 <div class="metric-strip"><div><span>Total duration</span><strong>{{ session.duration_ms|floatformat:1|default:"—" }} ms</strong></div><div><span>Turns</span><strong>{{ session.turns.count }}</strong></div><div><span>Spans</span><strong>{{ session.spans.count }}</strong></div><div><span>Findings</span><strong>{{ findings.count }}</strong></div><div><span>Correlation confidence</span><strong class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</strong></div></div>
 
 <article class="panel conversation-panel {% if not conversation %}mcp-only-panel{% endif %}">
   <div class="panel-head conversation-head">
     <div><p class="eyebrow">{% if conversation %}Conversation and operations{% else %}MCP operations{% endif %}</p><h2>{% if conversation %}Conversation history{% else %}Operation activity{% endif %}</h2></div>
-    <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ unassigned_operations|length }} operations{% endif %}</span>
+    <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ total_operations_count|default:unassigned_operations|length }} operations{% endif %}</span>
   </div>
   <div class="conversation-toolbar" aria-label="Operation view controls">
     <div class="operation-filters" role="group" aria-label="Operation type">
@@ -20,6 +43,7 @@
       <button class="operation-filter" type="button" data-operation-filter="error">Errors</button>
     </div>
     <div class="operation-actions">
+      <button class="operation-action" type="button" onclick="window.print()" title="Print current page as PDF">🖨️ Print Page</button>
       <button class="operation-action" type="button" data-operation-expand>Expand all</button>
       <button class="operation-action" type="button" data-operation-collapse>Collapse all</button>
     </div>
@@ -61,10 +85,21 @@
       </div>
     {% empty %}
       {% if unassigned_operations %}
-        <div class="mcp-only-intro"><span class="operation-icon kind-tool">⌘</span><div><h3>MCP activity only</h3><p>No conversation text was provided by the client. The latest {{ unassigned_operations|length }} tool and API operations are shown below.</p></div></div>
+        <div class="mcp-only-intro"><span class="operation-icon kind-tool">⌘</span><div><h3>MCP activity only</h3><p>No conversation text was provided by the client. Showing {{ unassigned_operations|length }} of {{ total_operations_count|default:unassigned_operations|length }} operations.</p></div></div>
         <div class="mcp-operation-list">
           {% for operation in unassigned_operations %}{% include "components/operation_card.html" %}{% endfor %}
         </div>
+        {% if operations_page_obj.has_other_pages %}
+          <nav class="pagination" style="margin: 20px 0; display: flex; justify-content: center; gap: 12px; align-items: center;">
+            {% if operations_page_obj.has_previous %}
+              <a class="filter-btn" href="?op_page={{ operations_page_obj.previous_page_number }}">← Previous (50)</a>
+            {% endif %}
+            <span class="muted font-mono text-sm">Page {{ operations_page_obj.number }} of {{ operations_page_obj.paginator.num_pages }} (Total {{ total_operations_count }} operations)</span>
+            {% if operations_page_obj.has_next %}
+              <a class="filter-btn" href="?op_page={{ operations_page_obj.next_page_number }}">Next (50) →</a>
+            {% endif %}
+          </nav>
+        {% endif %}
       {% else %}
         <div class="conversation-empty"><span>◎</span><h3>No traceable activity in this session</h3><p>The session ID exists, but no conversation, tool, or HTTP operation has been linked yet.</p></div>
       {% endif %}

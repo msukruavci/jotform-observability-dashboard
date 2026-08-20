@@ -39,6 +39,8 @@
         <a class="{% if active_nav == 'overview' %}active{% endif %}" href="{% url 'overview' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Overview</span></a>
         <a class="{% if active_nav == 'sessions' %}active{% endif %}" href="{% url 'session-list' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span>Sessions</span></a>
         <a class="{% if active_nav == 'tools' %}active{% endif %}" href="{% url 'tool-intelligence' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5 5L3.5 17.5a2.1 2.1 0 0 0 3 3l6.2-6.2a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"/></svg><span>Tool intelligence</span></a>
+        <a class="{% if active_nav == 'templates' %}active{% endif %}" href="{% url 'template-intelligence' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M4 9h16"/><path d="M9 4v16"/><circle cx="15" cy="14" r="2"/></svg><span>Template intelligence</span></a>
+
         <p class="nav-label">Improve</p>
         <a class="{% if active_nav == 'findings' %}active{% endif %}" href="{% url 'findings' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-4 12.7V19h8v-3.3A7 7 0 0 0 12 3Z"/><path d="M9 22h6M9 15h6"/></svg><span>Findings</span></a>
         <a class="{% if active_nav == 'costs' %}active{% endif %}" href="{% url 'costs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16 8.5c-.8-.7-2-1-3.5-1-1.9 0-3.5.9-3.5 2.5s1.5 2.1 3.5 2.5S16 13.4 16 15s-1.6 2.5-3.5 2.5c-1.5 0-2.8-.4-3.8-1.2M12 5.5v13"/></svg><span>Cost</span></a>
@@ -48,7 +50,7 @@
       </nav>
       <div class="sidebar-foot">
         <span class="health-mark"><i></i></span>
-        <div><strong>Data stream active</strong><small>Synced every 5 seconds</small></div>
+        <div><strong>Data stream active</strong><small>Synced every 5 minutes</small></div>
       </div>
     </aside>
     <main>
@@ -58,7 +60,7 @@
           <div class="workspace-title"><span>Workspace</span><strong>Jotform Workflow MCP</strong></div>
         </div>
         <div class="topbar-actions">
-          <div class="sync-state"><i></i><span>Live</span><small>5 sec</small></div>
+          <div class="sync-state"><i></i><span>Live</span><small>5 min</small></div>
           <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
             <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
             <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
@@ -71,6 +73,10 @@
       </section>
     </main>
   </div>
+
+  <!-- Global Modal Container for Templates & Inspects -->
+  <div id="modal-container"></div>
+
   <script>
     (() => {
       const root = document.documentElement;
@@ -83,8 +89,36 @@
         localStorage.setItem('pulse-theme', next);
         window.dispatchEvent(new CustomEvent('pulse-theme-change', {detail: next}));
       });
-      document.addEventListener('keydown', event => { if (event.key === 'Escape') body.classList.remove('sidebar-open'); });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          body.classList.remove('sidebar-open');
+          const modal = document.getElementById('modal-container');
+          if (modal) modal.innerHTML = '';
+        }
+      });
     })();
+
+    // Global Modal Helpers
+    window.closeTemplateModal = function(event) {
+      if (event && event.target && !event.target.classList.contains('modal-backdrop') && !event.target.closest('.icon-button') && !event.target.closest('[data-modal-close]')) {
+        return;
+      }
+      const container = document.getElementById('modal-container');
+      if (container) container.innerHTML = '';
+    };
+
+    window.copySnapshotJson = function() {
+      const codeElem = document.getElementById('snapshot-json-code');
+      const btnText = document.getElementById('copy-btn-text');
+      if (codeElem) {
+        navigator.clipboard.writeText(codeElem.innerText).then(() => {
+          if (btnText) {
+            btnText.innerText = 'Copied!';
+            setTimeout(() => { btnText.innerText = 'Copy JSON'; }, 2000);
+          }
+        });
+      }
+    };
   </script>
   {% block scripts %}{% endblock %}
 </body>

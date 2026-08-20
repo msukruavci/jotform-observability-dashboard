@@ -47,7 +47,7 @@ case "$command_name" in
     ensure_env
     printf 'Pulseboard başlatılıyor…\n'
     compose up --detach --build --wait
-    printf '\nHazır: http://localhost:8000\n'
+    printf '\nHazır: http://localhost:8090\n'
     ;;
   down)
     require_docker
@@ -58,7 +58,7 @@ case "$command_name" in
     require_docker
     ensure_env
     compose restart
-    printf 'Pulseboard yeniden başlatıldı: http://localhost:8000\n'
+    printf 'Pulseboard yeniden başlatıldı: http://localhost:8090\n'
     ;;
   status)
     require_docker
@@ -69,7 +69,7 @@ case "$command_name" in
     compose logs --follow --tail=150 web worker beat
     ;;
   open)
-    printf 'http://localhost:8000\n'
+    printf 'http://localhost:8090\n'
     ;;
   help|-h|--help|"")
     usage

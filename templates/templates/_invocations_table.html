@@ -1,0 +1,179 @@
+<div id="invocations-table-container">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 170px;">Timestamp &amp; Session</th>
+          <th style="width: 140px;">Tool Action</th>
+          <th style="min-width: 240px;">User Query / Target</th>
+          <th>Matched / Retrieved Templates</th>
+          <th class="num" style="width: 90px;">Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invocations_page.invocations %}
+        <tr>
+          <!-- Timestamp & Session -->
+          <td>
+            <div class="session-cell-meta">
+              <span class="timestamp-label mono">{{ inv.timestamp|slice:":19"|default:"—" }}</span>
+              <div class="session-link-wrap">
+                {% if inv.django_session_id %}
+                  <a href="{% url 'session-detail' inv.django_session_id %}" class="badge-session-link mono" title="View Full Session Trace">
+                    <span class="dot-indicator"></span>{{ inv.session_id|slice:":12" }}
+                  </a>
+                {% else %}
+                  <a href="{% url 'session-list' %}?q={{ inv.session_id }}" class="badge-session-link mono" title="Search in Sessions">
+                    <span class="dot-indicator"></span>{{ inv.session_id|slice:":12" }}
+                  </a>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+
+          <!-- Tool Action -->
+          <td>
+            {% if inv.is_search %}
+              <span class="badge badge-accent">
+                🔍 search ({{ inv.top_k|default:inv.template_count }})
+              </span>
+            {% elif inv.is_inspection %}
+              <span class="badge badge-primary">
+                🔬 get_template
+              </span>
+            {% else %}
+              <span class="badge">{{ inv.tool_name }}</span>
+            {% endif %}
+          </td>
+
+          <!-- User Query / Target -->
+          <td>
+            {% if inv.query %}
+              <div class="query-box">
+                <span class="query-quote">“{{ inv.query }}”</span>
+              </div>
+            {% elif inv.template_id %}
+              <div class="template-id-target">
+                <span class="mono muted">Target Template ID:</span>
+                <strong class="mono">{{ inv.template_id }}</strong>
+              </div>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Matched Templates -->
+          <td>
+            {% if inv.templates %}
+              <div class="matched-templates-list">
+                {% for t in inv.templates %}
+                <div class="matched-template-card">
+                  <div class="matched-template-header">
+                    <div class="matched-template-title-wrap">
+                      <strong class="matched-template-title">{{ t.title }}</strong>
+                      <span class="badge badge-category">{{ t.category }}</span>
+                      <span class="mono muted">#{{ t.id }}</span>
+                    </div>
+                    <div class="matched-template-badges">
+                      {% if inv.is_search and t.score > 0 %}
+                        <span class="score-badge {% if t.score >= 0.75 %}score-high{% elif t.score >= 0.65 %}score-mid{% else %}score-low{% endif %}">
+                          Score: {{ t.score }}
+                        </span>
+                      {% endif %}
+                      {% if t.clone_count %}
+                        <span class="clone-mini-badge mono" title="Global clones">
+                          ⚡ {{ t.clone_count }}
+                        </span>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  {% if t.description %}
+                    <p class="matched-template-desc">{{ t.description|truncatechars:180 }}</p>
+                  {% endif %}
+
+                  {% if t.steps_summary %}
+                    <div class="steps-chips-inline">
+                      {% for step in t.steps_summary|slice:":4" %}
+                        <span class="mini-chip">{{ step|truncatechars:20 }}</span>
+                      {% endfor %}
+                      {% if t.steps_summary|length > 4 %}
+                        <span class="mini-chip muted">+{{ t.steps_summary|length|add:"-4" }}</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+
+                  <div class="matched-template-actions">
+                    <button
+                      class="button secondary tiny"
+                      type="button"
+                      hx-get="{% url 'template-detail-modal' t.id %}"
+                      hx-target="#modal-container"
+                      hx-swap="innerHTML"
+                    >
+                      Inspect Blueprint <span>↗</span>
+                    </button>
+                    {% if t.jotform_url %}
+                      <a href="{{ t.jotform_url }}" target="_blank" rel="noopener noreferrer" class="link-external tiny">
+                        Jotform Page ↗
+                      </a>
+                    {% endif %}
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="muted">No templates returned.</span>
+            {% endif %}
+          </td>
+
+          <!-- Duration -->
+          <td class="num">
+            {% if inv.duration_ms %}
+              <span class="mono muted">{{ inv.duration_ms }} ms</span>
+            {% else %}
+              <span class="mono muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="empty">No MCP template invocations matched your search criteria.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination-bar">
+    <div class="pagination-info">
+      Showing <strong>{{ invocations_page.invocations|length }}</strong> of <strong>{{ invocations_page.total_items }}</strong> invocations (Page {{ invocations_page.page }} / {{ invocations_page.total_pages }})
+    </div>
+    <div class="pagination-controls">
+      {% if invocations_page.has_prev %}
+      <button
+        class="button secondary small"
+        hx-get="{% url 'template-intelligence' %}?target=invocations_table&tab=invocations&inv_page={{ invocations_page.prev_page }}&inv_q={{ inv_q }}&inv_tool={{ inv_tool }}"
+        hx-target="#invocations-table-container"
+        hx-swap="outerHTML"
+      >
+        ← Previous
+      </button>
+      {% endif %}
+
+      <span class="page-current mono">Page {{ invocations_page.page }}</span>
+
+      {% if invocations_page.has_next %}
+      <button
+        class="button secondary small"
+        hx-get="{% url 'template-intelligence' %}?target=invocations_table&tab=invocations&inv_page={{ invocations_page.next_page }}&inv_q={{ inv_q }}&inv_tool={{ inv_tool }}"
+        hx-target="#invocations-table-container"
+        hx-swap="outerHTML"
+      >
+        Next →
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>

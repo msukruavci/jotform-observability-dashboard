@@ -26,13 +26,14 @@ class ViewTests(TestCase):
         urls = [
             reverse("overview"), reverse("session-list"),
             reverse("session-detail", args=[self.session.id]),
-            reverse("tool-intelligence"), reverse("findings"),
-            reverse("costs"), reverse("data-health"),
+            reverse("tool-intelligence"), reverse("template-intelligence"),
+            reverse("findings"), reverse("costs"), reverse("data-health"),
         ]
         for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
+
 
     def test_trace_api_returns_session_shape(self):
         response = self.client.get(reverse("api-session-trace", args=[self.session.id]))
@@ -113,7 +114,7 @@ class ViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="session-results"')
-        self.assertContains(response, 'hx-trigger="every 5s"')
+        self.assertContains(response, 'hx-trigger="every 300s"')
         self.assertNotContains(response, "TRACE EXPLORER")
 
     def test_mcp_only_session_shows_unassigned_tool_activity(self):
@@ -188,3 +189,44 @@ class ViewTests(TestCase):
         self.assertIn("<strong>safe</strong>", rendered)
         self.assertNotIn("<script>", rendered)
         self.assertIn("&lt;script&gt;", rendered)
+
+    def test_template_intelligence_htmx_and_modal(self):
+        # Default view (Invocations tab)
+        response_inv = self.client.get(reverse("template-intelligence") + "?tab=invocations")
+        self.assertEqual(response_inv.status_code, 200)
+        self.assertContains(response_inv, "MCP Oturum &amp; Sorgu Analizi")
+
+        # Invocations HTMX partial table request
+        response_inv_partial = self.client.get(
+            reverse("template-intelligence") + "?target=invocations_table&tab=invocations&inv_q=feedback",
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response_inv_partial.status_code, 200)
+        self.assertTemplateUsed(response_inv_partial, "templates/_invocations_table.html")
+
+        # Catalog HTMX partial table request
+        response = self.client.get(
+            reverse("template-intelligence") + "?target=table&q=Leave&category=Human+Resources&sort=clones_desc",
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "templates/_table_rows.html")
+
+        # Analysis tab request
+        response_an = self.client.get(reverse("template-intelligence") + "?tab=analysis")
+        self.assertEqual(response_an.status_code, 200)
+        self.assertContains(response_an, "Çapraz Benzerlik")
+
+        # Analysis HTMX bucket partial request
+        response_an_partial = self.client.get(
+            reverse("template-intelligence") + "?target=analysis_pairs_table&tab=analysis&bucket=0.95-1.00",
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(response_an_partial.status_code, 200)
+        self.assertTemplateUsed(response_an_partial, "templates/_analysis_pairs_table.html")
+
+        # Modal endpoint test
+        modal_resp = self.client.get(reverse("template-detail-modal", args=["non-existent-id"]))
+        self.assertEqual(modal_resp.status_code, 200)
+        self.assertTemplateUsed(modal_resp, "templates/_detail_modal.html")
+
