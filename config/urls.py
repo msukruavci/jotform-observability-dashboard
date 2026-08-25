@@ -12,6 +12,8 @@ urlpatterns = [
     path("sessions/<uuid:pk>/export/json/", views.SessionExportJSONView.as_view(), name="session-export-json"),
     path("sessions/<uuid:pk>/export/markdown/", views.SessionExportMarkdownView.as_view(), name="session-export-markdown"),
     path("tools/", views.ToolIntelligenceView.as_view(), name="tool-intelligence"),
+    path("experiments/", views.ExperimentABCDView.as_view(), name="experiments"),
+    path("experiments/images/<str:filename>", views.ExperimentImageView.as_view(), name="experiment-image"),
     path("templates/", views.TemplateIntelligenceView.as_view(), name="template-intelligence"),
     path("templates/<str:template_id>/modal/", views.TemplateDetailModalView.as_view(), name="template-detail-modal"),
     path("findings/", views.FindingsView.as_view(), name="findings"),
@@ -19,5 +21,3 @@ urlpatterns = [
     path("data-health/", views.DataHealthView.as_view(), name="data-health"),
     path("api/v1/", include("apps.core.api_urls")),
 ]
-
-

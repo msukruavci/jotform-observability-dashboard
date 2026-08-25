@@ -1,0 +1,253 @@
+{% extends "layouts/base.html" %}
+{% block title %}ABCD Experiments{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Workflow evaluation</p>
+    <h1>ABCD Experiments</h1>
+    <p>Compare template support and gap inspection across four similar workflow-generation runs.</p>
+  </div>
+</div>
+
+<div class="metric-grid">
+  <article class="metric-card accent"><p>Completed runs <span>#</span></p><strong>{{ summary.completed_runs }}</strong><small>{{ summary.profiles_ready }}/4 profiles with data</small></article>
+  <article class="metric-card"><p>Avg first build <span>ms</span></p><strong>{{ summary.avg_first_build_ms|floatformat:0 }}</strong><small>successful build_workflow_bulk only</small></article>
+  <article class="metric-card"><p>Findings <span>!</span></p><strong>{{ summary.total_findings }}</strong><small>{{ summary.total_finding_wasted_ms|floatformat:0 }} ms flagged</small></article>
+  <article class="metric-card"><p>Build issues <span>x</span></p><strong>{{ summary.total_build_errors }}</strong><small>{{ summary.total_missing_builds }} missing builds</small></article>
+</div>
+
+<section class="experiment-run-grid" aria-label="Latest ABCD test results">
+  {% for run in run_rows %}
+    <article class="experiment-run-card">
+      <div class="experiment-run-title">
+        <span>{{ run.scenario.label }}</span>
+        <div>
+          <strong>{{ run.scenario.name }}</strong>
+          <small>{{ run.tool_profile|default:"unknown" }} · {{ run.session.started_at|date:"d M H:i:s" }}</small>
+        </div>
+      </div>
+      <div class="experiment-run-stats">
+        <div><strong>{{ run.session.duration_ms|floatformat:0 }} ms</strong><small>Session</small></div>
+        <div><strong>{{ run.first_build_ms|floatformat:0 }} ms</strong><small>First build</small></div>
+        <div><strong>{{ run.final_build_ms|floatformat:0 }} ms</strong><small>Final build</small></div>
+        <div><strong>{{ run.build_attempt_count }}</strong><small>Build tries</small></div>
+      </div>
+      <div class="experiment-run-links">
+        {% if run.workflow_url %}<a href="{{ run.workflow_url }}" target="_blank" rel="noreferrer">Workflow {{ run.workflow_id }}</a>{% endif %}
+        <a href="{% url 'session-detail' run.session.id %}">Open trace</a>
+      </div>
+      <ul class="experiment-note-list">
+        {% for note in run.notes %}<li>{{ note }}</li>{% empty %}<li>No notes.</li>{% endfor %}
+      </ul>
+    </article>
+  {% empty %}
+    <article class="experiment-run-card empty-run-card">
+      <div class="experiment-run-title"><span>?</span><div><strong>No test run yet</strong><small>Ingest ABCD logs to populate this view.</small></div></div>
+    </article>
+  {% endfor %}
+</section>
+
+<article class="panel">
+  <div class="panel-head">
+    <div><p class="eyebrow">Workflow screenshots</p><h2>Visual comparison</h2></div>
+  </div>
+  <div class="experiment-image-grid">
+    {% for item in image_rows %}
+      <figure class="experiment-image-card">
+        <figcaption>
+          <span>{{ item.scenario.label }}</span>
+          <strong>{{ item.scenario.name }}</strong>
+          <small>{{ item.filename|default:"Waiting for image" }}</small>
+        </figcaption>
+        {% if item.filename %}
+          <a href="{% url 'experiment-image' item.filename %}" target="_blank" rel="noreferrer">
+            <img src="{% url 'experiment-image' item.filename %}" alt="{{ item.scenario.label }} workflow screenshot">
+          </a>
+          <small class="mono">{{ item.filenames|join:" · " }}</small>
+        {% else %}
+          <div class="experiment-image-empty">
+            <strong>{{ item.scenario.label }}1.png</strong>
+            <small>{{ item.image_root }}</small>
+          </div>
+        {% endif %}
+      </figure>
+    {% endfor %}
+  </div>
+</article>
+
+<article class="panel">
+  <div class="panel-head">
+    <div><p class="eyebrow">Comparison</p><h2>Speed and call volume</h2></div>
+  </div>
+  <div id="experiment-chart" class="chart tall" aria-label="ABCD experiment comparison chart"></div>
+</article>
+
+<article class="panel flush">
+  <div class="panel-head padded">
+    <div><p class="eyebrow">Latest runs</p><h2>Individual test results</h2></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th><th>Workflow</th><th class="num">Session</th><th class="num">First build</th><th class="num">Final build</th><th class="num">To first</th><th class="num">To final</th><th class="num">Post-first</th><th class="num">Builds</th><th class="num">Abandoned</th><th class="num">Tools</th><th class="num">API</th>
+          <th>Tool surface</th><th>Behavior</th><th class="num">Findings</th><th class="num">Flagged ms</th>
+          <th class="num">Steps</th><th class="num">Links</th><th class="num">Warnings</th><th>Notes</th><th>Tool sequence</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for run in run_rows %}
+        <tr>
+          <td>
+            <strong>{{ run.scenario.label }}</strong> {{ run.scenario.name }}<br>
+            <span class="mono">{{ run.tool_profile|default:"unknown" }}</span>
+          </td>
+          <td>
+            {% if run.workflow_url %}<a href="{{ run.workflow_url }}" target="_blank" rel="noreferrer">{{ run.workflow_id }}</a>{% elif run.workflow_id %}<span class="mono">{{ run.workflow_id }}</span>{% else %}<span class="muted">No workflow</span>{% endif %}
+            <br><a href="{% url 'session-detail' run.session.id %}">Open trace</a>
+          </td>
+          <td class="num mono">{{ run.session.duration_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ run.first_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ run.final_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ run.time_to_first_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ run.time_to_final_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ run.post_build_ms|floatformat:1 }} ms</td>
+          <td class="num">{{ run.successful_build_count }}/{{ run.build_attempt_count }}</td>
+          <td class="num">{{ run.abandoned_workflow_count }}</td>
+          <td class="num">{{ run.tool_count }}</td>
+          <td class="num">{{ run.api_count }}</td>
+          <td>
+            {% if run.exposure_ok is None %}
+              <span class="muted">Unknown</span>
+            {% elif run.exposure_ok %}
+              OK
+            {% else %}
+              Mismatch
+            {% endif %}
+            <br><span class="mono">{{ run.advertised_tool_count }} tools · T={{ run.template_exposed|yesno:"on,off" }} · G={{ run.gap_exposed|yesno:"on,off" }}</span>
+          </td>
+          <td>{% if run.behavior_ok %}OK{% else %}Needs review{% endif %}</td>
+          <td class="num">{{ run.finding_count }}</td>
+          <td class="num mono">{{ run.finding_wasted_ms|floatformat:1 }} ms</td>
+          <td class="num">{{ run.created_step_count }}</td>
+          <td class="num">{{ run.created_link_count }}</td>
+          <td class="num">{{ run.warning_count }}</td>
+          <td class="notes-cell">
+            <ul class="experiment-note-list">
+              {% for note in run.notes %}<li>{{ note }}</li>{% empty %}<li>No notes.</li>{% endfor %}
+            </ul>
+          </td>
+          <td class="mono">{{ run.tool_sequence|join:" → " }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="21" class="empty">No individual ABCD test run has been ingested yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<article class="panel flush">
+  <div class="panel-head padded">
+    <div><p class="eyebrow">Run plan</p><h2>Scenario prompts and flags</h2></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Scenario</th><th>Profile</th><th>Marker</th><th>Template</th><th>Gap inspection</th><th>Prompt</th><th>Env label</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> {{ row.name }}</td>
+          <td class="mono">{{ row.profile }}</td>
+          <td class="mono">{{ row.marker }}</td>
+          <td>{{ row.template_enabled|yesno:"On,Off" }}</td>
+          <td>{{ row.gap_enabled|yesno:"On,Off" }}</td>
+          <td>{{ row.prompt }}</td>
+          <td class="mono">MCP_EXPERIMENT_SCENARIO={{ row.label }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<article class="panel flush">
+  <div class="panel-head padded">
+    <div><p class="eyebrow">Results</p><h2>Scenario metrics</h2></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th><th class="num">Runs</th><th class="num">Avg session</th><th class="num">Avg first build</th><th class="num">Avg final build</th><th class="num">Avg to first</th><th class="num">Avg to final</th><th class="num">Avg post-first</th><th class="num">Tool calls</th><th class="num">API calls</th>
+          <th class="num">Tool ms</th><th class="num">API ms</th><th class="num">Template used</th><th class="num">Gap used</th>
+          <th class="num">Health issues</th><th class="num">Findings</th><th class="num">Flagged ms</th><th class="num">Build errors</th><th class="num">Missing build</th><th class="num">Publishable</th><th>Latest</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.label }}</strong> {{ row.name }}</td>
+          <td class="num">{{ row.session_count }}</td>
+          <td class="num mono">{{ row.avg_duration_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_first_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_final_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_time_to_first_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_time_to_final_build_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_post_build_ms|floatformat:1 }} ms</td>
+          <td class="num">{{ row.avg_tool_calls|floatformat:1 }}</td>
+          <td class="num">{{ row.avg_api_calls|floatformat:1 }}</td>
+          <td class="num mono">{{ row.avg_tool_ms|floatformat:1 }} ms</td>
+          <td class="num mono">{{ row.avg_api_ms|floatformat:1 }} ms</td>
+          <td class="num">{{ row.template_used }}</td>
+          <td class="num">{{ row.gap_used }}</td>
+          <td class="num">{{ row.quality_issues }}</td>
+          <td class="num">{{ row.finding_count }}</td>
+          <td class="num mono">{{ row.finding_wasted_ms|floatformat:1 }} ms</td>
+          <td class="num">{{ row.build_errors }}</td>
+          <td class="num">{{ row.missing_builds }}</td>
+          <td class="num">{{ row.publishable }}</td>
+          <td>{% if row.latest_session %}<a href="{% url 'session-detail' row.latest_session.id %}">Open</a>{% else %}<span class="muted">No data</span>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="21" class="empty">No ABCD experiment logs have been ingested yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (() => {
+    const rows = {{ chart_json|safe }};
+    const element = document.getElementById('experiment-chart');
+    const chart = echarts.init(element);
+    const draw = () => {
+      const s = getComputedStyle(document.documentElement);
+      chart.setOption({
+        backgroundColor: 'transparent',
+        color: ['#ff6100', '#2563eb', '#16a3a3', '#7c3aed', '#dc2626'],
+        tooltip: {trigger: 'axis', backgroundColor: s.getPropertyValue('--surface').trim(), borderColor: s.getPropertyValue('--line').trim(), textStyle: {color: s.getPropertyValue('--text').trim(), fontSize: 12}},
+        legend: {top: 0, textStyle: {color: s.getPropertyValue('--muted').trim(), fontSize: 11}},
+        grid: {left: 48, right: 24, top: 42, bottom: 38},
+        xAxis: {type: 'category', data: rows.map(row => row.label + ' / ' + row.profile), axisLabel: {color: s.getPropertyValue('--muted').trim(), fontSize: 11}, axisLine: {lineStyle: {color: s.getPropertyValue('--line').trim()}}},
+        yAxis: [{type: 'value', name: 'ms', axisLabel: {color: s.getPropertyValue('--muted').trim(), fontSize: 11}, splitLine: {lineStyle: {color: s.getPropertyValue('--line').trim()}}}, {type: 'value', name: 'count', axisLabel: {color: s.getPropertyValue('--muted').trim(), fontSize: 11}, splitLine: {show: false}}],
+        series: [
+          {name: 'Avg session', type: 'bar', data: rows.map(row => row.avg_duration_ms)},
+          {name: 'Avg first build', type: 'bar', data: rows.map(row => row.avg_first_build_ms)},
+          {name: 'Avg final build', type: 'bar', data: rows.map(row => row.avg_final_build_ms)},
+          {name: 'Avg to first', type: 'bar', data: rows.map(row => row.avg_time_to_first_build_ms)},
+          {name: 'Avg to final', type: 'bar', data: rows.map(row => row.avg_time_to_final_build_ms)},
+          {name: 'Tool calls', type: 'line', yAxisIndex: 1, data: rows.map(row => row.avg_tool_calls), smooth: true},
+          {name: 'Issues', type: 'bar', yAxisIndex: 1, data: rows.map(row => row.quality_issues + row.finding_count + row.build_errors + row.missing_builds)}
+        ]
+      }, true);
+    };
+    draw();
+    addEventListener('resize', () => chart.resize());
+    addEventListener('pulse-theme-change', draw);
+  })();
+</script>
+{% endblock %}

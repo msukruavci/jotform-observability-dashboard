@@ -7,7 +7,18 @@
   <div>
     <p class="eyebrow">Session details</p>
     <h1><span class="mono">{{ session.external_session_id }}</span></h1>
-    <p>{{ session.provider|default:"unknown" }} / {{ session.model|default:"model unknown" }} · {{ session.started_at|date:"d M Y H:i:s T" }}</p>
+    <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      {% if session.platform == 'claude' %}
+        <span style="background: rgba(217, 119, 6, 0.18); color: #f59e0b; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700;">🟣 Claude (Anthropic)</span>
+      {% elif session.platform == 'gemini' %}
+        <span style="background: rgba(37, 99, 235, 0.18); color: #3b82f6; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700;">🔵 Gemini (Google)</span>
+      {% elif session.platform == 'gpt' %}
+        <span style="background: rgba(22, 163, 74, 0.18); color: #22c55e; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700;">🟢 ChatGPT / GPT</span>
+      {% else %}
+        <span style="background: rgba(148, 163, 184, 0.18); color: #94a3b8; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700;">⚙️ MCP Direct</span>
+      {% endif %}
+      <span>{{ session.provider|default:"unknown" }} / {{ session.model|default:"model unknown" }} · {{ session.started_at|date:"d M Y H:i:s T" }}</span>
+    </p>
   </div>
   <div class="session-actions-wrapper">
     <div class="export-btn-group">
@@ -28,6 +39,89 @@
   </div>
 </div>
 <div class="metric-strip"><div><span>Total duration</span><strong>{{ session.duration_ms|floatformat:1|default:"—" }} ms</strong></div><div><span>Turns</span><strong>{{ session.turns.count }}</strong></div><div><span>Spans</span><strong>{{ session.spans.count }}</strong></div><div><span>Findings</span><strong>{{ findings.count }}</strong></div><div><span>Correlation confidence</span><strong class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</strong></div></div>
+
+{% if created_resources.total_count %}
+<article class="panel created-resources-panel" style="margin-bottom: 20px; border-left: 4px solid var(--accent, #ff6100);">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow">Jotform Generated Resources</p>
+      <h2>Created & Mutated Workflows / Forms</h2>
+    </div>
+    <span class="resource-summary-badge" style="background: rgba(255, 97, 0, 0.12); color: #ff6100; font-weight: 600; padding: 4px 10px; border-radius: 999px; font-size: 0.85rem;">
+      {{ created_resources.workflows|length }} Workflows · {{ created_resources.forms|length }} Forms
+    </span>
+  </div>
+  <div class="resources-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px 20px;">
+    {% for wf in created_resources.workflows %}
+      <div class="resource-card" style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div>
+            <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #ff6100; letter-spacing: 0.5px;">Workflow</span>
+            <h3 style="margin: 4px 0 2px; font-size: 1.05rem; font-weight: 600;">{{ wf.title }}</h3>
+            <span class="mono" style="font-size: 0.8rem; color: var(--text-muted, #8b949e);">ID: {{ wf.workflow_id }}</span>
+          </div>
+          {% if wf.published %}
+            <span style="background: rgba(46, 160, 67, 0.15); color: #3fb950; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Published</span>
+          {% else %}
+            <span style="background: rgba(187, 128, 9, 0.15); color: #d29922; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Draft</span>
+          {% endif %}
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.82rem; color: var(--text-secondary, #c9d1d9);">
+          {% if wf.step_count %}<span style="background: var(--bg-subtle, #161821); padding: 2px 8px; border-radius: 4px;">⚡ {{ wf.step_count }} steps</span>{% endif %}
+          {% if wf.links_count %}<span style="background: var(--bg-subtle, #161821); padding: 2px 8px; border-radius: 4px;">🔗 {{ wf.links_count }} links</span>{% endif %}
+          {% if wf.deleted_steps %}<span style="background: rgba(248, 81, 73, 0.15); color: #f85149; padding: 2px 8px; border-radius: 4px;">🗑 {{ wf.deleted_steps|length }} deleted ({{ wf.deleted_steps|join:", " }})</span>{% endif %}
+        </div>
+
+        {% if wf.trigger_form_id %}
+          <div style="font-size: 0.82rem; color: var(--text-muted, #8b949e); border-top: 1px dashed var(--border-color, #2d313e); padding-top: 8px;">
+            <span>Trigger Form: </span>
+            {% if wf.trigger_form_url %}
+              <a href="{{ wf.trigger_form_url }}" target="_blank" rel="noreferrer" style="color: #58a6ff; text-decoration: underline;">Form #{{ wf.trigger_form_id }} ↗</a>
+            {% else %}
+              <span class="mono">{{ wf.trigger_form_id }}</span>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if wf.workflow_url %}
+          <div style="margin-top: auto; padding-top: 6px;">
+            <a class="button primary compact" href="{{ wf.workflow_url }}" target="_blank" rel="noreferrer" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 6px 12px; border-radius: 6px;">
+              <span>Open in Jotform Workflow Builder</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    {% for form in created_resources.forms %}
+      <div class="resource-card" style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div>
+            <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #2da44e; letter-spacing: 0.5px;">Form</span>
+            <h3 style="margin: 4px 0 2px; font-size: 1.05rem; font-weight: 600;">{{ form.title }}</h3>
+            <span class="mono" style="font-size: 0.8rem; color: var(--text-muted, #8b949e);">ID: {{ form.form_id }}</span>
+          </div>
+        </div>
+
+        {% if form.summary %}
+          <p style="font-size: 0.82rem; color: var(--text-secondary, #c9d1d9); margin: 0;">{{ form.summary }}</p>
+        {% endif %}
+
+        {% if form.form_url %}
+          <div style="margin-top: auto; padding-top: 6px;">
+            <a class="button secondary compact" href="{{ form.form_url }}" target="_blank" rel="noreferrer" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; padding: 6px 12px; border-radius: 6px;">
+              <span>Open in Jotform Form Builder</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</article>
+{% endif %}
 
 <article class="panel conversation-panel {% if not conversation %}mcp-only-panel{% endif %}">
   <div class="panel-head conversation-head">

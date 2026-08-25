@@ -74,24 +74,66 @@ def get_workspace() -> Workspace:
     return workspace
 
 
+def detect_provider_and_model(payload: dict) -> tuple[str | None, str | None]:
+    if payload.get("provider") and str(payload.get("provider")) not in ("mcp", "canonical", "unknown"):
+        return str(payload["provider"]), str(payload.get("model") or "")
+
+    headers = payload.get("headers") or {}
+    if isinstance(headers, dict):
+        ua = str(headers.get("user-agent") or "").lower()
+        origin = str(headers.get("origin") or "").lower()
+        if "claude" in ua or "anthropic" in ua or "claude.ai" in origin:
+            return "anthropic", "Claude Connector"
+        if "chatgpt" in ua or "openai" in ua or "chatgpt.com" in origin or "openai.com" in origin:
+            return "openai", "ChatGPT Connector"
+        if "gemini" in ua or "google" in ua:
+            return "gemini", "Gemini Client"
+        if "cursor" in ua:
+            return "cursor", "Cursor IDE"
+
+    query = payload.get("query") or {}
+    if isinstance(query, dict):
+        platform = str(query.get("platform") or query.get("client") or "").lower()
+        if platform in ("claude", "anthropic"):
+            return "anthropic", "Claude SSE"
+        if platform in ("gpt", "openai", "chatgpt"):
+            return "openai", "ChatGPT SSE"
+        if platform == "gemini":
+            return "gemini", "Gemini SSE"
+
+    client_name = str(payload.get("client_name") or payload.get("client") or "").lower()
+    if "claude" in client_name:
+        return "anthropic", "Claude Desktop"
+    if "openai" in client_name or "chatgpt" in client_name:
+        return "openai", "ChatGPT Connector"
+    if "gemini" in client_name:
+        return "gemini", "Gemini Client"
+
+    return None, None
+
+
 def get_session(payload: dict, *, provider: str) -> Session:
     external_id = str(payload.get("session_id") or payload.get("run_id") or "unknown")
+    det_prov, det_model = detect_provider_and_model(payload)
+    effective_provider = det_prov or provider
+    effective_model = det_model or str(payload.get("model") or "")
+
     session, created = Session.objects.get_or_create(
         workspace=get_workspace(),
         external_session_id=external_id,
         defaults={
-            "provider": provider,
-            "model": str(payload.get("model") or ""),
-            "agent_name": str(payload.get("agent_name") or provider),
+            "provider": effective_provider,
+            "model": effective_model,
+            "agent_name": str(payload.get("agent_name") or effective_provider),
             "correlation_confidence": "high" if payload.get("trace_id") else "low",
         },
     )
     changed = []
-    if provider not in {"mcp", "canonical"} and (not session.provider or session.provider in {"mcp", "canonical"}):
-        session.provider = provider
+    if effective_provider not in {"mcp", "canonical", "unknown"} and (not session.provider or session.provider in {"mcp", "canonical", "unknown"}):
+        session.provider = effective_provider
         changed.append("provider")
-    if payload.get("model") and not session.model:
-        session.model = str(payload["model"])
+    if effective_model and (not session.model or session.model in {"tool/API traffic", "unknown"}):
+        session.model = effective_model
         changed.append("model")
     if payload.get("trace_id") and session.correlation_confidence != "high":
         session.correlation_confidence = "high"
@@ -120,6 +162,26 @@ def get_session(payload: dict, *, provider: str) -> Session:
             session.task = task
             session.save(update_fields=["task"])
     return session
+
+
+def merge_session_metadata(session: Session, payload: dict) -> None:
+    keys = (
+        "tool_profile",
+        "experiment_id",
+        "experiment_scenario",
+        "experiment_prompt_id",
+        "experiment_prompt",
+    )
+    metadata = dict(session.metadata or {})
+    changed = False
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and metadata.get(key) != value:
+            metadata[key] = value
+            changed = True
+    if changed:
+        session.metadata = metadata
+        session.save(update_fields=["metadata"])
 
 
 def update_session_bounds(session: Session) -> None:
@@ -207,6 +269,7 @@ def nearest_open_tool(session: Session, timestamp):
 
 def normalize_mcp_event(payload: dict) -> None:
     session = get_session(payload, provider="mcp")
+    merge_session_metadata(session, payload)
     event_type = str(payload.get("event_type") or "")
     timestamp = as_datetime(payload.get("timestamp")) or timezone.now()
     request_id = str(payload.get("request_id") or "")
@@ -473,5 +536,123 @@ def discover_log_files(root: str | Path) -> list[Path]:
     return [path for path in candidates if path.is_file()]
 
 
+def reclassify_sessions(root: str | Path | None = None) -> dict[str, int]:
+    from django.conf import settings
+    root_path = Path(root or settings.MCP_LOG_ROOT)
+    session_logs_dir = root_path / "mcp_server" / "logs" / "sessions"
+    turns_file = root_path / "agent" / "logs" / "turns.jsonl"
+
+    turns_map: dict[str, dict] = {}
+    if turns_file.exists():
+        with turns_file.open("r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                try:
+                    t = json.loads(line)
+                    sid = str(t.get("session_id") or "").strip()
+                    if sid:
+                        turns_map[sid] = t
+                except Exception:
+                    pass
+
+    summary = {"claude": 0, "gemini": 0, "gpt": 0, "mcp": 0, "updated": 0}
+
+    for sess in Session.objects.all():
+        sid = sess.external_session_id
+        original_prov = sess.provider
+        original_model = sess.model
+
+        new_prov = sess.provider
+        new_model = sess.model
+
+        # 1. Check turns.jsonl
+        if sid in turns_map:
+            t = turns_map[sid]
+            new_prov = t.get("provider") or new_prov
+            new_model = t.get("model") or new_model
+
+        # 2. Check experiment metadata
+        meta = sess.metadata or {}
+        exp_id = str(meta.get("experiment_id") or "")
+        if "abcd" in exp_id or "dealer" in exp_id or "warranty" in exp_id or "customer-returns" in exp_id:
+            new_prov = "anthropic"
+            if not new_model or new_model in ("tool/API traffic", "unknown"):
+                new_model = "claude-3-5-sonnet-20241022"
+
+        # 3. Check session logs for User-Agent & Origin
+        if session_logs_dir.exists():
+            matching = list(session_logs_dir.glob(f"*{sid}*.jsonl"))
+            for match_path in matching:
+                try:
+                    with match_path.open("r", encoding="utf-8", errors="ignore") as fp:
+                        for line in fp:
+                            ev = json.loads(line)
+                            hdrs = ev.get("headers") or {}
+                            ua = str(hdrs.get("user-agent") or hdrs.get("User-Agent") or "").lower()
+                            orig = str(hdrs.get("origin") or hdrs.get("Origin") or "").lower()
+                            if "claude" in ua or "anthropic" in ua or "claude.ai" in orig:
+                                new_prov = "anthropic"
+                                if not new_model or new_model in ("tool/API traffic", "unknown"):
+                                    new_model = "Claude Connector"
+                            elif "chatgpt" in ua or "openai" in ua or "chatgpt.com" in orig or "openai.com" in orig:
+                                new_prov = "openai"
+                                if not new_model or new_model in ("tool/API traffic", "unknown"):
+                                    new_model = "ChatGPT Connector"
+                            elif "gemini" in ua or "google" in ua:
+                                new_prov = "gemini"
+                                if not new_model or new_model in ("tool/API traffic", "unknown"):
+                                    new_model = "Gemini Client"
+                except Exception:
+                    pass
+
+        # 4. Known historical tunnel/agent sessions
+        chatgpt_prefixes = (
+            "f985c6c7ed51", "ce7b99e039b2", "1e4f32b0ec55",
+            "f87c6bccb5b7", "a127ab00af4d", "ffe97588d865",
+            "4ee4aa19ddc8", "f625764a9da8", "4cec10af05d9",
+            "ec6eb26c8d18", "534a4d8bbd6b", "7cbe93d2eab9", "c6eb564b519b"
+        )
+        if any(sid.startswith(p) for p in chatgpt_prefixes):
+            new_prov = "openai"
+            if not new_model or new_model in ("tool/API traffic", "unknown"):
+                new_model = "ChatGPT Developer Connector"
+
+        gemini_prefixes = ("82de46c0ca25", "d25838cfe792", "af0712b3133f")
+        if any(sid.startswith(p) for p in gemini_prefixes):
+            new_prov = "gemini"
+            if not new_model or new_model in ("tool/API traffic", "unknown"):
+                new_model = "gemini-3.6-flash"
+
+        # 5. Fallback if empty
+        if not new_prov:
+            new_prov = "mcp"
+
+        changed_fields = []
+        if new_prov != original_prov:
+            sess.provider = new_prov
+            changed_fields.append("provider")
+        if new_model != original_model:
+            sess.model = new_model
+            changed_fields.append("model")
+
+        if changed_fields:
+            sess.save(update_fields=changed_fields)
+            summary["updated"] += 1
+
+        p_lower = (sess.provider or "").lower()
+        m_lower = (sess.model or "").lower()
+        if "anthropic" in p_lower or "claude" in p_lower or "claude" in m_lower:
+            summary["claude"] += 1
+        elif "gemini" in p_lower or "google" in p_lower or "gemini" in m_lower:
+            summary["gemini"] += 1
+        elif "openai" in p_lower or "gpt" in p_lower or "chatgpt" in p_lower or "gpt" in m_lower:
+            summary["gpt"] += 1
+        else:
+            summary["mcp"] += 1
+
+    return summary
+
+
 def ingest_tree(root: str | Path) -> list[dict]:
-    return [ingest_file(path) for path in discover_log_files(root)]
+    results = [ingest_file(path) for path in discover_log_files(root)]
+    reclassify_sessions(root)
+    return results

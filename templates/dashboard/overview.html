@@ -33,6 +33,27 @@
   </article>
 </div>
 
+<div class="platforms-overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 20px;">
+  {% for p in platforms %}
+    <a href="{% url 'session-list' %}?platform={{ p.key }}" class="platform-summary-card" style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px 16px; text-decoration: none; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.95rem; color: var(--text-primary, #f0f6fc);">
+          <span>{{ p.icon }}</span>
+          <span>{{ p.name }}</span>
+        </span>
+        <span style="background: {{ p.badge_bg }}; color: {{ p.badge_color }}; font-weight: 700; font-size: 0.8rem; padding: 2px 8px; border-radius: 999px;">
+          {{ p.session_count }} runs
+        </span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-secondary, #c9d1d9); border-top: 1px dashed var(--border-color, #2d313e); padding-top: 6px;">
+        <span>Success: <strong style="color: #3fb950;">{{ p.success_rate }}%</strong></span>
+        <span>Avg: <strong>{{ p.avg_duration_ms|floatformat:0 }} ms</strong></span>
+        <span>Cost: <strong>${{ p.cost_usd|floatformat:3 }}</strong></span>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+
 <div class="split-grid wide-left">
   <article class="panel">
     <div class="panel-head"><div><p class="eyebrow">Traffic</p><h2>Session activity</h2></div><span class="muted">daily</span></div>

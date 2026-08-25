@@ -69,3 +69,72 @@ def cost_by_model() -> list[dict]:
     rows = Turn.objects.exclude(cost_usd=None).values("session__provider", "session__model").annotate(cost=Sum("cost_usd"), turns=Count("id")).order_by("-cost")
     return [{"provider": row["session__provider"], "model": row["session__model"], "cost": float(row["cost"]), "turns": row["turns"]} for row in rows]
 
+
+def platform_breakdown_metrics() -> list[dict]:
+    platforms = [
+        {
+            "key": "claude",
+            "name": "Claude (Anthropic)",
+            "icon": "🟣",
+            "badge_bg": "rgba(217, 119, 6, 0.15)",
+            "badge_color": "#f59e0b",
+            "filter": Q(provider__icontains="anthropic") | Q(provider__icontains="claude") | Q(model__icontains="claude"),
+        },
+        {
+            "key": "gemini",
+            "name": "Gemini (Google)",
+            "icon": "🔵",
+            "badge_bg": "rgba(37, 99, 235, 0.15)",
+            "badge_color": "#3b82f6",
+            "filter": Q(provider__icontains="gemini") | Q(provider__icontains="google") | Q(model__icontains="gemini"),
+        },
+        {
+            "key": "gpt",
+            "name": "ChatGPT / GPT (OpenAI)",
+            "icon": "🟢",
+            "badge_bg": "rgba(22, 163, 74, 0.15)",
+            "badge_color": "#22c55e",
+            "filter": Q(provider__icontains="openai") | Q(provider__icontains="gpt") | Q(provider__icontains="chatgpt") | Q(model__icontains="gpt") | Q(model__icontains="o1") | Q(model__icontains="o3"),
+        },
+        {
+            "key": "mcp",
+            "name": "Direct MCP",
+            "icon": "⚙️",
+            "badge_bg": "rgba(148, 163, 184, 0.15)",
+            "badge_color": "#94a3b8",
+            "filter": (Q(provider="mcp") | Q(provider="")) & ~Q(provider__icontains="test") & ~Q(model__icontains="test") & ~Q(model__icontains="claude") & ~Q(model__icontains="gemini") & ~Q(model__icontains="gpt"),
+        },
+        {
+            "key": "test",
+            "name": "Tests / CI (Mock)",
+            "icon": "🧪",
+            "badge_bg": "rgba(239, 68, 68, 0.15)",
+            "badge_color": "#ef4444",
+            "filter": Q(provider__icontains="test") | Q(provider__icontains="ci") | Q(model__icontains="test") | Q(model__icontains="pytest"),
+        },
+    ]
+
+    result = []
+    base_sessions = Session.objects.filter(Q(turns__isnull=False) | Q(spans__isnull=False)).distinct()
+    for p in platforms:
+        sess = base_sessions.filter(p["filter"])
+        count = sess.count()
+        durations = [d for d in sess.exclude(duration_ms=None).values_list("duration_ms", flat=True) if d]
+        ok_count = sess.filter(status="ok").count()
+        cost = Turn.objects.filter(session__in=sess).exclude(cost_usd=None).aggregate(total=Sum("cost_usd"))["total"] or Decimal("0")
+        turns_count = Turn.objects.filter(session__in=sess).count()
+        result.append({
+            "key": p["key"],
+            "name": p["name"],
+            "icon": p["icon"],
+            "badge_bg": p["badge_bg"],
+            "badge_color": p["badge_color"],
+            "session_count": count,
+            "success_rate": round(ok_count * 100 / count, 1) if count else 0.0,
+            "avg_duration_ms": round(sum(durations) / len(durations), 0) if durations else 0,
+            "turns_count": turns_count,
+            "cost_usd": cost,
+        })
+    return result
+
+

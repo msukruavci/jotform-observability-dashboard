@@ -41,6 +41,31 @@ class Session(models.Model):
     def display_name(self) -> str:
         return self.external_session_id[:12]
 
+    @property
+    def platform(self) -> str:
+        p = (self.provider or "").lower()
+        m = (self.model or "").lower()
+        if "test" in p or "test" in m or "ci" in p or "pytest" in m:
+            return "test"
+        if "anthropic" in p or "claude" in p or "claude" in m:
+            return "claude"
+        if "gemini" in p or "google" in p or "gemini" in m:
+            return "gemini"
+        if "openai" in p or "chatgpt" in p or "gpt" in p or "gpt" in m or "o1" in m or "o3" in m:
+            return "gpt"
+        return "mcp"
+
+    @property
+    def platform_display(self) -> str:
+        mapping = {
+            "claude": "Claude",
+            "gemini": "Gemini",
+            "gpt": "ChatGPT / GPT",
+            "mcp": "MCP Direct",
+            "test": "🧪 Tests / CI",
+        }
+        return mapping.get(self.platform, "MCP")
+
 
 class Turn(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

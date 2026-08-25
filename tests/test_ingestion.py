@@ -60,6 +60,30 @@ class IngestionTests(TestCase):
         self.assertEqual(external.span.attributes["status_code"], 200)
         self.assertEqual(external.span.attributes["response"], {})
 
+    def test_mcp_experiment_metadata_is_saved_on_session(self):
+        rows = [
+            {
+                "timestamp": "2026-08-14T10:00:00Z",
+                "session_id": "abcd-session-1",
+                "event_type": "mcp.list_tools.completed",
+                "request_id": "tools-1",
+                "tool_profile": "ab_c",
+                "experiment_id": "abcd-2026-08-24",
+                "experiment_scenario": "C",
+                "experiment_prompt_id": "dealer-onboarding",
+                "experiment_prompt": "Yeni bayi başvuru talepleri için workflow kurmak istiyorum.",
+                "tool_count": 12,
+                "duration_ms": 4,
+            }
+        ]
+        with TemporaryDirectory() as directory:
+            ingest_file(self.write_jsonl(directory, "mcp.jsonl", rows))
+
+        metadata = Session.objects.get(external_session_id="abcd-session-1").metadata
+        self.assertEqual(metadata["tool_profile"], "ab_c")
+        self.assertEqual(metadata["experiment_scenario"], "C")
+        self.assertEqual(metadata["experiment_prompt_id"], "dealer-onboarding")
+
     def test_invalid_json_goes_to_quarantine_without_raw_event(self):
         with TemporaryDirectory() as directory:
             result = ingest_file(self.write_jsonl(directory, "bad.jsonl", ["not-json"]))

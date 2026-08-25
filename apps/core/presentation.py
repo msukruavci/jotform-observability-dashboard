@@ -207,3 +207,99 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None) -> dict
         card["fields"] = payload_fields(span.attributes)
         card["raw_label"] = "Operation metadata"
     return card
+
+
+def session_created_resources(session) -> dict[str, Any]:
+    """
+    Extract created or mutated workflows and forms from a session's tool calls.
+    """
+    from apps.traces.models import ToolCall
+
+    workflows_map: dict[str, dict[str, Any]] = {}
+    forms_map: dict[str, dict[str, Any]] = {}
+
+    tool_calls = list(
+        getattr(session, "_prefetched_tool_calls", None)
+        or ToolCall.objects.filter(span__session=session).select_related("span")
+    )
+
+    for call in tool_calls:
+        args = parse_json_string(call.arguments) or {}
+        res = parse_json_string(call.result) or {}
+        tool_name = call.tool_name
+
+        if not isinstance(res, dict):
+            continue
+
+        # Extract workflows
+        wf_id = str(res.get("workflow_id") or args.get("workflow_id") or "").strip()
+        wf_url = res.get("workflow_url") or (f"https://www.jotform.com/workflow/{wf_id}/build" if wf_id else "")
+        title = args.get("title") or res.get("title") or res.get("form_title") or ""
+        created_steps = res.get("created_steps") or {}
+        deleted_steps = res.get("deleted_steps") or []
+        created_links_count = res.get("created_links_count") or len(res.get("created_links") or [])
+        trigger_form_id = str(res.get("trigger_form_id") or args.get("trigger_form_id") or "").strip()
+        trigger_form_url = res.get("trigger_form_url") or (f"https://www.jotform.com/build/{trigger_form_id}" if trigger_form_id else "")
+
+        if wf_id:
+            if wf_id not in workflows_map:
+                workflows_map[wf_id] = {
+                    "workflow_id": wf_id,
+                    "title": title or f"Workflow #{wf_id}",
+                    "workflow_url": wf_url,
+                    "trigger_form_id": trigger_form_id,
+                    "trigger_form_url": trigger_form_url,
+                    "created_steps": created_steps,
+                    "step_count": len(created_steps) if isinstance(created_steps, (dict, list)) else 0,
+                    "deleted_steps": deleted_steps,
+                    "links_count": created_links_count,
+                    "published": bool(res.get("published")),
+                    "is_created": tool_name in ("build_workflow_bulk", "create_workflow", "create_workflow_with_ai_form"),
+                }
+            else:
+                existing = workflows_map[wf_id]
+                if title and existing["title"].startswith("Workflow #"):
+                    existing["title"] = title
+                if trigger_form_id and not existing["trigger_form_id"]:
+                    existing["trigger_form_id"] = trigger_form_id
+                    existing["trigger_form_url"] = trigger_form_url
+                if created_steps:
+                    if isinstance(existing["created_steps"], dict) and isinstance(created_steps, dict):
+                        existing["created_steps"].update(created_steps)
+                        existing["step_count"] = len(existing["created_steps"])
+                if deleted_steps:
+                    existing["deleted_steps"] = list(set(existing["deleted_steps"] + deleted_steps))
+                if res.get("published"):
+                    existing["published"] = True
+
+        # Extract forms
+        form_id = str(res.get("form_id") or res.get("trigger_form_id") or res.get("resource_id") or "").strip()
+        if not form_id and tool_name == "create_form_with_ai" and args.get("form_id"):
+            form_id = str(args.get("form_id")).strip()
+
+        form_url = res.get("form_url") or res.get("trigger_form_url") or (f"https://www.jotform.com/build/{form_id}" if form_id else "")
+        form_title = res.get("title") or res.get("form_title") or args.get("title") or args.get("form_prompt") or ""
+        form_summary = res.get("summary") or res.get("form_summary") or ""
+
+        if form_id:
+            if form_id not in forms_map:
+                forms_map[form_id] = {
+                    "form_id": form_id,
+                    "title": form_title or f"Form #{form_id}",
+                    "form_url": form_url,
+                    "summary": form_summary,
+                    "is_created": tool_name in ("build_workflow_bulk", "create_form_with_ai", "create_workflow_with_ai_form"),
+                }
+            else:
+                existing_f = forms_map[form_id]
+                if form_title and existing_f["title"].startswith("Form #"):
+                    existing_f["title"] = form_title
+                if form_summary and not existing_f["summary"]:
+                    existing_f["summary"] = form_summary
+
+    return {
+        "workflows": list(workflows_map.values()),
+        "forms": list(forms_map.values()),
+        "total_count": len(workflows_map) + len(forms_map),
+    }
+

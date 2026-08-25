@@ -64,7 +64,7 @@ services:
   beat:
     build: .
     env_file: .env
-    command: celery -A config beat --loglevel=INFO
+    command: celery -A config beat -s /tmp/celerybeat-schedule --loglevel=INFO
     volumes:
       - .:/app
       - ../jotform-workflow-mcp:/data/mcp:ro

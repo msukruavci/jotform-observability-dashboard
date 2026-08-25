@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import mimetypes
+from pathlib import Path
 
 from django.contrib import messages
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Q, Sum
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
@@ -15,8 +18,9 @@ from apps.findings.models import Annotation, Finding
 from apps.ingestion.models import IngestionSource, QuarantinedEvent, RawEvent
 from apps.traces.models import Session, Span, ToolCall, Turn
 
-from .metrics import cost_by_model, overview_metrics, session_timeseries, tool_metrics
-from .presentation import operation_card, pretty_payload
+from .experiment_metrics import IMAGE_EXTENSIONS, experiment_image_rows, experiment_run_rows, experiment_summary, scenario_rows
+from .metrics import cost_by_model, overview_metrics, platform_breakdown_metrics, session_timeseries, tool_metrics
+from .presentation import operation_card, pretty_payload, session_created_resources
 from .template_analytics import (
     filter_templates,
     get_cross_similarity_analysis_data,
@@ -34,6 +38,7 @@ class OverviewView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(overview_metrics())
+        context["platforms"] = platform_breakdown_metrics()
         context["timeseries_json"] = json.dumps(session_timeseries())
         context["slow_sessions"] = Session.objects.exclude(duration_ms=None).order_by("-duration_ms")[:6]
         context["top_findings"] = Finding.objects.filter(status="open").select_related("session").order_by("-severity", "-created_at")[:6]
@@ -51,13 +56,26 @@ class SessionListView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        query = Session.objects.annotate(
+        base_query = Session.objects.annotate(
             turn_count=Count("turns", distinct=True),
             span_count=Count("spans", distinct=True),
             tool_count=Count("spans", filter=Q(spans__kind="tool"), distinct=True),
             finding_count=Count("findings", distinct=True),
         ).filter(Q(turn_count__gt=0) | Q(span_count__gt=0))
+        query = base_query
         params = self.request.GET
+        platform = params.get("platform", "").strip().lower()
+        if platform:
+            if platform == "claude":
+                query = query.filter(Q(provider__icontains="anthropic") | Q(provider__icontains="claude") | Q(model__icontains="claude"))
+            elif platform == "gemini":
+                query = query.filter(Q(provider__icontains="gemini") | Q(provider__icontains="google") | Q(model__icontains="gemini"))
+            elif platform == "gpt":
+                query = query.filter(Q(provider__icontains="openai") | Q(provider__icontains="gpt") | Q(provider__icontains="chatgpt") | Q(model__icontains="gpt") | Q(model__icontains="o1") | Q(model__icontains="o3"))
+            elif platform == "test":
+                query = query.filter(Q(provider__icontains="test") | Q(provider__icontains="ci") | Q(model__icontains="test") | Q(model__icontains="pytest"))
+            elif platform == "mcp":
+                query = query.filter((Q(provider="mcp") | Q(provider="")) & ~Q(provider__icontains="test") & ~Q(model__icontains="test") & ~Q(model__icontains="claude") & ~Q(model__icontains="gemini") & ~Q(model__icontains="gpt"))
         if params.get("q"):
             query = query.filter(Q(external_session_id__icontains=params["q"]) | Q(model__icontains=params["q"]) | Q(turns__question__icontains=params["q"])).distinct()
         for field in ("status", "provider", "model", "correlation_confidence"):
@@ -71,7 +89,19 @@ class SessionListView(TemplateView):
             F("ended_at").desc(nulls_last=True),
             F("started_at").desc(nulls_last=True),
         ), 50)
-        context["page_obj"] = paginator.get_page(params.get("page"))
+        page_obj = paginator.get_page(params.get("page"))
+        for item in page_obj:
+            item.created_resources = session_created_resources(item)
+        context["page_obj"] = page_obj
+        context["platform_counts"] = {
+            "all": base_query.count(),
+            "claude": base_query.filter(Q(provider__icontains="anthropic") | Q(provider__icontains="claude") | Q(model__icontains="claude")).count(),
+            "gemini": base_query.filter(Q(provider__icontains="gemini") | Q(provider__icontains="google") | Q(model__icontains="gemini")).count(),
+            "gpt": base_query.filter(Q(provider__icontains="openai") | Q(provider__icontains="gpt") | Q(provider__icontains="chatgpt") | Q(model__icontains="gpt") | Q(model__icontains="o1") | Q(model__icontains="o3")).count(),
+            "mcp": base_query.filter((Q(provider="mcp") | Q(provider="")) & ~Q(provider__icontains="test") & ~Q(model__icontains="test") & ~Q(model__icontains="claude") & ~Q(model__icontains="gemini") & ~Q(model__icontains="gpt")).count(),
+            "test": base_query.filter(Q(provider__icontains="test") | Q(provider__icontains="ci") | Q(model__icontains="test") | Q(model__icontains="pytest")).count(),
+        }
+        context["active_platform"] = platform or "all"
         context["providers"] = Session.objects.exclude(provider="").values_list("provider", flat=True).distinct().order_by("provider")
         context["models"] = Session.objects.exclude(model="").values_list("model", flat=True).distinct().order_by("model")
         context["tools"] = ToolCall.objects.values_list("tool_name", flat=True).distinct().order_by("tool_name")
@@ -98,6 +128,7 @@ class SessionDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         session = self.object
+        context["created_resources"] = session_created_resources(session)
         spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
         origin = session.started_at or next((span.started_at for span in spans if span.started_at), None)
         waterfall = []
@@ -156,6 +187,58 @@ class ToolIntelligenceView(TemplateView):
         context["chart_json"] = json.dumps(metrics)
         context["active_nav"] = "tools"
         return context
+
+
+class ExperimentABCDView(TemplateView):
+    template_name = "experiments/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = scenario_rows()
+        chart_rows = [
+            {
+                "label": row["label"],
+                "profile": row["profile"],
+                "avg_duration_ms": row["avg_duration_ms"],
+                "avg_first_build_ms": row["avg_first_build_ms"],
+                "avg_final_build_ms": row["avg_final_build_ms"],
+                "avg_time_to_first_build_ms": row["avg_time_to_first_build_ms"],
+                "avg_time_to_final_build_ms": row["avg_time_to_final_build_ms"],
+                "avg_tool_calls": row["avg_tool_calls"],
+                "avg_api_calls": row["avg_api_calls"],
+                "quality_issues": row["quality_issues"],
+                "finding_count": row["finding_count"],
+                "build_errors": row["build_errors"],
+                "missing_builds": row["missing_builds"],
+            }
+            for row in rows
+        ]
+        context["rows"] = rows
+        context["run_rows"] = experiment_run_rows()
+        context["image_rows"] = experiment_image_rows()
+        context["summary"] = experiment_summary(rows)
+        context["chart_json"] = json.dumps(chart_rows, ensure_ascii=False)
+        context["active_nav"] = "experiments"
+        return context
+
+
+class ExperimentImageView(View):
+    def get(self, request, filename):
+        requested = Path(filename)
+        if requested.name != filename or requested.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise Http404("Image not found")
+
+        image_root = settings.MCP_LOG_ROOT / "mcp_server" / "logs" / "img"
+        image_path = (image_root / requested.name).resolve()
+        try:
+            image_path.relative_to(image_root.resolve())
+        except ValueError as exc:
+            raise Http404("Image not found") from exc
+        if not image_path.is_file():
+            raise Http404("Image not found")
+
+        content_type = mimetypes.guess_type(image_path.name)[0] or "application/octet-stream"
+        return FileResponse(image_path.open("rb"), content_type=content_type)
 
 
 class FindingsView(TemplateView):
@@ -534,5 +617,3 @@ class SessionExportMarkdownView(View):
         response = HttpResponse("\n".join(lines), content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="jotform_mcp_session_{short_id}.md"'
         return response
-
-

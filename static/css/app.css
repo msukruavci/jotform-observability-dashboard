@@ -174,6 +174,34 @@ main { grid-column: 2; min-width: 0; }
 .chart { height: 270px; }
 .chart.tall { height: 390px; }
 .empty { padding: 38px 20px !important; color: var(--muted); font-size: 11px; text-align: center; }
+.notes-cell { min-width: 340px; max-width: 520px; }
+.experiment-note-list { margin: 0; padding-left: 17px; color: var(--text); line-height: 1.45; }
+.experiment-note-list li + li { margin-top: 5px; }
+.experiment-run-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; margin-bottom: 18px; }
+.experiment-run-card { padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
+.experiment-run-title { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.experiment-run-title > span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: var(--orange); color: white; font-size: 18px; font-weight: 700; }
+.experiment-run-title strong { display: block; color: var(--ink); font-size: 15px; line-height: 1.25; }
+.experiment-run-title small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.experiment-run-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.experiment-run-stats div { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.experiment-run-stats strong { display: block; color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.experiment-run-stats small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+.experiment-run-links { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 13px; font-size: 11px; font-weight: 600; }
+.experiment-run-links a { color: var(--orange-dark); text-decoration: none; }
+.experiment-run-links a:hover { text-decoration: underline; }
+.empty-run-card { min-height: 120px; }
+.experiment-image-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.experiment-image-card { overflow: hidden; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.experiment-image-card figcaption { display: grid; grid-template-columns: 30px 1fr; gap: 2px 9px; align-items: center; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+.experiment-image-card figcaption span { grid-row: span 2; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: var(--navy); color: white; font-size: 13px; font-weight: 700; }
+.experiment-image-card figcaption strong { overflow: hidden; color: var(--ink); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.experiment-image-card figcaption small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.experiment-image-card a { display: block; background: white; }
+.experiment-image-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #f6f7fb; }
+.experiment-image-empty { display: grid; min-height: 180px; place-items: center; gap: 6px; padding: 16px; background: var(--surface); text-align: center; }
+.experiment-image-empty strong { color: var(--ink); font-size: 12px; }
+.experiment-image-empty small { max-width: 100%; overflow-wrap: anywhere; color: var(--muted); font-size: 9px; line-height: 1.4; }
 
 /* Tables and filters */
 .table-wrap { overflow: auto; }
@@ -661,6 +689,7 @@ table { font-size: 14px; }
 
 @media (max-width: 1160px) {
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .experiment-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split-grid, .split-grid.wide-left, .trace-layout { grid-template-columns: 1fr; }
   .filter-bar { grid-template-columns: 1fr 1fr 1fr; }
   .filter-bar button { grid-column: auto; }
@@ -693,6 +722,7 @@ table { font-size: 14px; }
   .page-head { align-items: flex-start; flex-direction: column; }
   .page-head .button { width: 100%; }
   .metric-grid, .metric-grid.two { grid-template-columns: 1fr; }
+  .experiment-image-grid { grid-template-columns: 1fr; }
   .metric-card { min-height: 112px; }
   .filter-bar, .filter-bar.short { grid-template-columns: 1fr; max-width: none; }
   .filter-bar button { grid-column: 1; }
@@ -1410,6 +1440,3 @@ table { font-size: 14px; }
     margin: 15mm 12mm 15mm 12mm;
   }
 }
-
-
-

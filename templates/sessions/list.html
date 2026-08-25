@@ -2,9 +2,38 @@
 {% block title %}Sessions{% endblock %}
 {% block content %}
 <div class="page-head compact">
-  <div><p class="eyebrow">Trace explorer</p><h1>Sessions</h1><p>Inspect conversations and direct MCP tool/API activity, starting with the latest event.</p></div>
+  <div><p class="eyebrow">Trace explorer</p><h1>Sessions</h1><p>Inspect conversations and direct MCP tool/API activity by LLM platform.</p></div>
 </div>
+
+<div class="platform-tabs" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;" role="tablist" aria-label="Filter by LLM platform">
+  <a class="platform-tab {% if active_platform == 'all' %}active{% endif %}" href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.tool %}tool={{ request.GET.tool }}&{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'all' %}var(--accent, #ff6100){% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'all' %}#fff{% else %}var(--text-secondary, #c9d1d9){% endif %};">
+    <span>🌟 All</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.all }}</span>
+  </a>
+  <a class="platform-tab {% if active_platform == 'claude' %}active{% endif %}" href="?platform=claude{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'claude' %}#d97706{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'claude' %}#fff{% else %}#f59e0b{% endif %};">
+    <span>🟣 Claude (Anthropic)</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.claude }}</span>
+  </a>
+  <a class="platform-tab {% if active_platform == 'gemini' %}active{% endif %}" href="?platform=gemini{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'gemini' %}#2563eb{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'gemini' %}#fff{% else %}#3b82f6{% endif %};">
+    <span>🔵 Gemini (Google)</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.gemini }}</span>
+  </a>
+  <a class="platform-tab {% if active_platform == 'gpt' %}active{% endif %}" href="?platform=gpt{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'gpt' %}#16a34a{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'gpt' %}#fff{% else %}#22c55e{% endif %};">
+    <span>🟢 ChatGPT / GPT</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.gpt }}</span>
+  </a>
+  <a class="platform-tab {% if active_platform == 'mcp' %}active{% endif %}" href="?platform=mcp{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'mcp' %}#64748b{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'mcp' %}#fff{% else %}#94a3b8{% endif %};">
+    <span>⚙️ MCP Direct</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.mcp }}</span>
+  </a>
+  <a class="platform-tab {% if active_platform == 'test' %}active{% endif %}" href="?platform=test{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'test' %}#dc2626{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'test' %}#fff{% else %}#f87171{% endif %};">
+    <span>🧪 Tests / CI</span>
+    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.test }}</span>
+  </a>
+</div>
+
 <form class="filter-bar" method="get" role="search">
+  {% if request.GET.platform %}<input type="hidden" name="platform" value="{{ request.GET.platform }}">{% endif %}
   <input name="q" value="{{ request.GET.q }}" aria-label="Search sessions" placeholder="Search session, model, or question…">
   <select name="status" aria-label="Filter by status"><option value="">All statuses</option><option {% if request.GET.status == 'ok' %}selected{% endif %}>ok</option><option {% if request.GET.status == 'error' %}selected{% endif %}>error</option><option {% if request.GET.status == 'running' %}selected{% endif %}>running</option><option {% if request.GET.status == 'unknown' %}selected{% endif %}>unknown</option></select>
   <select name="provider" aria-label="Filter by provider"><option value="">All providers</option>{% for item in providers %}<option value="{{ item }}" {% if request.GET.provider == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select>
