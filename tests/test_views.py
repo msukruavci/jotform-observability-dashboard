@@ -20,7 +20,7 @@ from apps.traces.models import ExternalCall, Session, Span, ToolCall, Turn
 class ViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        workspace = Workspace.objects.create(name="Test", slug="test")
+        workspace, _ = Workspace.objects.get_or_create(slug="test", defaults={"name": "Test"})
         cls.session = Session.objects.create(
             workspace=workspace, external_session_id="session-view",
             provider="mcp", status="ok", correlation_confidence="low",

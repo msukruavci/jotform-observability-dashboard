@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.OverviewView.as_view(), name="overview"),
     path("sessions/", views.SessionListView.as_view(), name="session-list"),
     path("sessions/<uuid:pk>/", views.SessionDetailView.as_view(), name="session-detail"),
+    path("sessions/<uuid:pk>/ai-analysis/", views.SessionAIAnalysisView.as_view(), name="session-ai-analysis"),
     path("sessions/<uuid:pk>/export/pdf-view/", views.SessionExportPDFView.as_view(), name="session-export-pdf-view"),
     path("sessions/<uuid:pk>/export/json/", views.SessionExportJSONView.as_view(), name="session-export-json"),
     path("sessions/<uuid:pk>/export/markdown/", views.SessionExportMarkdownView.as_view(), name="session-export-markdown"),

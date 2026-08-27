@@ -303,3 +303,198 @@ def session_created_resources(session) -> dict[str, Any]:
         "total_count": len(workflows_map) + len(forms_map),
     }
 
+
+def format_duration_human(ms: float | None) -> str:
+    if ms is None or ms <= 0:
+        return "0 ms"
+    if ms < 1000:
+        return f"{ms:.0f} ms"
+    sec = ms / 1000.0
+    if sec < 60:
+        return f"{sec:.1f}s"
+    mins = int(sec // 60)
+    rem_sec = int(sec % 60)
+    return f"{mins}m {rem_sec}s" if rem_sec else f"{mins}m"
+
+
+def session_timing_breakdown(session: Any, spans: list[Any] | None = None) -> dict[str, Any]:
+    """
+    Computes a 3-layer latency breakdown (LLM reasoning vs MCP local engine vs Jotform Cloud API)
+    while isolating idle user pauses / long dead gaps (>120s) so active execution time is not distorted.
+    """
+    if spans is None:
+        if hasattr(session, "spans"):
+            spans = list(session.spans.all())
+        else:
+            spans = []
+
+    # 1. Jotform API (HTTP) time: sum of 'external' spans
+    ext_spans = [s for s in spans if getattr(s, "kind", None) == "external"]
+    jotform_api_ms = sum(float(s.duration_ms or 0) for s in ext_spans)
+
+    # 2. Tool spans total
+    tool_spans = [s for s in spans if getattr(s, "kind", None) == "tool"]
+    tool_spans_sorted = sorted([s for s in tool_spans if getattr(s, "started_at", None)], key=lambda s: s.started_at)
+    tool_total_ms = sum(float(s.duration_ms or 0) for s in tool_spans)
+
+    # MCP Internal logic (Auto-Layout, RAG, preflight validation)
+    mcp_internal_ms = max(0.0, tool_total_ms - jotform_api_ms)
+
+    # 3. LLM think time between tool calls & turns
+    IDLE_THRESHOLD_MS = 120000.0  # 2 minutes
+    llm_active_ms = 0.0
+    idle_gap_ms = 0.0
+    idle_gaps_count = 0
+
+    for i in range(len(tool_spans_sorted) - 1):
+        s1 = tool_spans_sorted[i]
+        s2 = tool_spans_sorted[i + 1]
+        if getattr(s1, "ended_at", None) and getattr(s2, "started_at", None):
+            gap = (s2.started_at - s1.ended_at).total_seconds() * 1000.0
+            if gap > 0:
+                if gap <= IDLE_THRESHOLD_MS:
+                    llm_active_ms += gap
+                else:
+                    llm_active_ms += IDLE_THRESHOLD_MS
+                    idle_gap_ms += (gap - IDLE_THRESHOLD_MS)
+                    idle_gaps_count += 1
+
+    # If no multiple tool calls, check turn duration or session duration
+    if not tool_spans_sorted and session:
+        wall_ms = float(getattr(session, "duration_ms", None) or 0)
+        if wall_ms <= IDLE_THRESHOLD_MS:
+            llm_active_ms = wall_ms
+        else:
+            llm_active_ms = IDLE_THRESHOLD_MS
+            idle_gap_ms = wall_ms - IDLE_THRESHOLD_MS
+            idle_gaps_count = 1
+
+    active_duration_ms = jotform_api_ms + mcp_internal_ms + llm_active_ms
+    wall_duration_ms = float(getattr(session, "duration_ms", None) or active_duration_ms) if session else active_duration_ms
+
+    # Check if extra wall time beyond active work is idle
+    untracked_wall_diff = wall_duration_ms - (active_duration_ms + idle_gap_ms)
+    if untracked_wall_diff > IDLE_THRESHOLD_MS:
+        idle_gap_ms += untracked_wall_diff
+        idle_gaps_count += 1
+
+    # Compute percentages of active time
+    denom = max(active_duration_ms, 1.0)
+    pct_llm = round((llm_active_ms / denom) * 100.0, 1)
+    pct_api = round((jotform_api_ms / denom) * 100.0, 1)
+    pct_mcp = round((mcp_internal_ms / denom) * 100.0, 1)
+
+    return {
+        "active_duration_ms": active_duration_ms,
+        "active_duration_formatted": format_duration_human(active_duration_ms),
+        "wall_duration_ms": wall_duration_ms,
+        "wall_duration_formatted": format_duration_human(wall_duration_ms),
+        "jotform_api_ms": jotform_api_ms,
+        "jotform_api_formatted": format_duration_human(jotform_api_ms),
+        "mcp_internal_ms": mcp_internal_ms,
+        "mcp_internal_formatted": format_duration_human(mcp_internal_ms),
+        "llm_active_ms": llm_active_ms,
+        "llm_active_formatted": format_duration_human(llm_active_ms),
+        "idle_gap_ms": idle_gap_ms,
+        "idle_gap_formatted": format_duration_human(idle_gap_ms),
+        "idle_gaps_count": idle_gaps_count,
+        "has_idle_gap": idle_gap_ms > 0,
+        "pct_llm": pct_llm,
+        "pct_api": pct_api,
+        "pct_mcp": pct_mcp,
+    }
+
+
+def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[str, list[dict]] | None = None) -> list[dict[str, Any]]:
+    """
+    Groups raw spans into Synthetic Turns (Turlar / Islem Donguleri) when the client did not supply chat turns.
+    Computes inter-tool gaps (LLM reasoning) and inter-turn gaps (User wait time / human delay).
+    """
+    if not spans:
+        return []
+
+    raw_events_by_request = raw_events_by_request or {}
+    spans_sorted = sorted(spans, key=lambda s: (s.started_at or s.id, s.sequence_no or 0))
+
+    turns_raw: list[dict[str, Any]] = []
+    current_spans: list[Any] = []
+    last_end = None
+
+    for span in spans_sorted:
+        gap_sec = 0.0
+        if last_end and span.started_at:
+            gap_sec = max(0.0, (span.started_at - last_end).total_seconds())
+
+        is_new_turn = False
+        if not current_spans:
+            is_new_turn = True
+        elif gap_sec > 25.0:
+            is_new_turn = True
+        elif gap_sec > 10.0 and span.name in ("search_workflow_templates", "build_workflow_bulk", "create_form_with_ai", "restore_workflow_revision"):
+            is_new_turn = True
+
+        if is_new_turn and current_spans:
+            turns_raw.append({"spans": current_spans, "gap_before_sec": gap_sec})
+            current_spans = []
+
+        current_spans.append(span)
+        if span.ended_at:
+            last_end = max(last_end or span.ended_at, span.ended_at)
+
+    if current_spans:
+        turns_raw.append({"spans": current_spans, "gap_before_sec": 0.0})
+
+    result: list[dict[str, Any]] = []
+    for idx, t in enumerate(turns_raw, 1):
+        t_spans = t["spans"]
+        gap_before_sec = t["gap_before_sec"]
+        
+        start = t_spans[0].started_at
+        end = t_spans[-1].ended_at or t_spans[-1].started_at
+        dur_ms = (end - start).total_seconds() * 1000.0 if start and end else 0.0
+
+        detected_intent = ""
+        for sp in t_spans:
+            tool_obj = getattr(sp, "tool_call", None)
+            args = tool_obj.arguments if tool_obj and isinstance(tool_obj.arguments, dict) else {}
+            candidate = args.get("intent") or args.get("query") or args.get("form_prompt") or args.get("reason") or args.get("title")
+            if candidate:
+                detected_intent = str(candidate)[:140]
+                break
+        if not detected_intent:
+            tool_names = [sp.name for sp in t_spans if sp.kind == "tool"]
+            detected_intent = f"İşlem Döngüsü: {', '.join(tool_names[:3])}" if tool_names else "MCP İşlem Bloğu"
+
+        operations = []
+        prev_op_end = None
+        for sp in t_spans:
+            card = operation_card(sp, raw_events_by_request.get(sp.request_id))
+            gap_ms = 0.0
+            if prev_op_end and sp.started_at:
+                gap_ms = max(0.0, (sp.started_at - prev_op_end).total_seconds() * 1000.0)
+            
+            card["gap_before_ms"] = gap_ms
+            card["gap_formatted"] = format_duration_human(gap_ms)
+            card["gap_type"] = "user_wait" if gap_ms > 120000.0 else "llm_reasoning" if gap_ms > 400.0 else "none"
+            operations.append(card)
+            if sp.ended_at:
+                prev_op_end = max(prev_op_end or sp.ended_at, sp.ended_at)
+
+        synth_turn = {
+            "id": f"synthetic-{idx}",
+            "sequence_no": idx,
+            "question": detected_intent,
+            "answer": f"Bu turda {len(t_spans)} işlem tamamlandı. (Aktif işlem süresi: {format_duration_human(dur_ms)})",
+            "started_at": start,
+            "ended_at": end,
+            "duration_ms": dur_ms,
+            "is_synthetic": True,
+            "gap_before_formatted": format_duration_human(gap_before_sec * 1000.0) if gap_before_sec > 0 else "",
+            "gap_before_sec": gap_before_sec,
+        }
+        result.append({"turn": synth_turn, "operations": operations})
+
+    return result
+
+
+

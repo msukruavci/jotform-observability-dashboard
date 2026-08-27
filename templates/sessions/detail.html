@@ -26,6 +26,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         <span>PDF Raporu</span>
       </a>
+      <button class="button" type="button" style="background: linear-gradient(135deg, #7c5ac7 0%, #c084fc 100%); border-color: transparent; color: white;" onclick="openAIModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <span>🤖 AI Analizi</span>
+      </button>
       <a class="button secondary" href="{% url 'session-export-json' session.id %}" download title="Download full trace as JSON">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span>JSON İndir</span>
@@ -38,7 +42,89 @@
     {% include "components/status_badge.html" with status=session.status %}
   </div>
 </div>
-<div class="metric-strip"><div><span>Total duration</span><strong>{{ session.duration_ms|floatformat:1|default:"—" }} ms</strong></div><div><span>Turns</span><strong>{{ session.turns.count }}</strong></div><div><span>Spans</span><strong>{{ session.spans.count }}</strong></div><div><span>Findings</span><strong>{{ findings.count }}</strong></div><div><span>Correlation confidence</span><strong class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</strong></div></div>
+<div class="metric-strip"><div><span>Active duration</span><strong>{{ timing_breakdown.active_duration_formatted|default:"—" }}</strong></div><div><span>Wall duration</span><strong>{{ timing_breakdown.wall_duration_formatted|default:"—" }}</strong></div><div><span>Turns</span><strong>{{ session.turns.count }}</strong></div><div><span>Spans</span><strong>{{ session.spans.count }}</strong></div><div><span>Findings</span><strong>{{ findings.count }}</strong></div><div><span>Correlation confidence</span><strong class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</strong></div></div>
+
+<article class="panel timing-breakdown-panel" style="margin-bottom: 20px; border-left: 4px solid var(--purple, #7c5ac7);">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow">Latency & Execution Profiling</p>
+      <h2>3-Layer Timing Breakdown</h2>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      {% if timing_breakdown.has_idle_gap %}
+        <span style="background: rgba(234, 179, 8, 0.18); color: #eab308; padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700;">
+          ⚠️ +{{ timing_breakdown.idle_gap_formatted }} Boşta / Şüpheli Gecikme
+        </span>
+      {% endif %}
+      <span style="background: rgba(124, 90, 199, 0.15); color: #a855f7; font-weight: 700; padding: 4px 12px; border-radius: 999px; font-size: 0.88rem;">
+        ⚡ Efektif Aktif Süre: {{ timing_breakdown.active_duration_formatted }}
+      </span>
+    </div>
+  </div>
+
+  <div style="padding: 16px 20px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
+      <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #c084fc;">🧠 LLM Sentez / Akıl Yürütme</span>
+          <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.15); color: #c084fc; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_llm }}%</span>
+        </div>
+        <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.llm_active_formatted }}</strong>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Tool aralarında token üretimi & planlama</small>
+      </div>
+
+      <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #4ade80;">🌐 Jotform Cloud API (HTTP)</span>
+          <span style="font-size: 0.75rem; background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_api }}%</span>
+        </div>
+        <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.jotform_api_formatted }}</strong>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Form Copilot, updateTree & GET istekleri</small>
+      </div>
+
+      <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #fb923c;">⚙️ MCP Sunucu Motoru</span>
+          <span style="font-size: 0.75rem; background: rgba(255, 97, 0, 0.15); color: #fb923c; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_mcp }}%</span>
+        </div>
+        <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.mcp_internal_formatted }}</strong>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Auto-Layout, RAG tarama & Preflight test</small>
+      </div>
+
+      <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #60a5fa;">⏱️ Efektif vs Toplam Süre</span>
+        </div>
+        <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.active_duration_formatted }}</strong>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">
+          Toplam açık kalma: {{ timing_breakdown.wall_duration_formatted }}
+          {% if timing_breakdown.has_idle_gap %}
+            <span style="color: #eab308;">(⚠️ {{ timing_breakdown.idle_gap_formatted }} boşta)</span>
+          {% endif %}
+        </small>
+      </div>
+    </div>
+
+    {% if timing_breakdown.active_duration_ms > 0 %}
+      <div style="margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-secondary, #c9d1d9); margin-bottom: 6px;">
+          <span>Katman Bazlı Zaman Dağılımı</span>
+          <span>Aktif Toplam: <strong>{{ timing_breakdown.active_duration_formatted }}</strong></span>
+        </div>
+        <div style="display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.06);">
+          <div style="width: {{ timing_breakdown.pct_llm }}%; background: #a855f7;" title="LLM Sentez: {{ timing_breakdown.llm_active_formatted }} ({{ timing_breakdown.pct_llm }}%)"></div>
+          <div style="width: {{ timing_breakdown.pct_api }}%; background: #22c55e;" title="Jotform API: {{ timing_breakdown.jotform_api_formatted }} ({{ timing_breakdown.pct_api }}%)"></div>
+          <div style="width: {{ timing_breakdown.pct_mcp }}%; background: #ff6100;" title="MCP Motoru: {{ timing_breakdown.mcp_internal_formatted }} ({{ timing_breakdown.pct_mcp }}%)"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 0.75rem; margin-top: 8px; flex-wrap: wrap;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #c084fc;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #a855f7; display: inline-block;"></i> 🧠 LLM: <strong>{{ timing_breakdown.llm_active_formatted }}</strong> ({{ timing_breakdown.pct_llm }}%)</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #4ade80;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;"></i> 🌐 Jotform API: <strong>{{ timing_breakdown.jotform_api_formatted }}</strong> ({{ timing_breakdown.pct_api }}%)</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #fb923c;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #ff6100; display: inline-block;"></i> ⚙️ MCP Motoru: <strong>{{ timing_breakdown.mcp_internal_formatted }}</strong> ({{ timing_breakdown.pct_mcp }}%)</span>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</article>
 
 {% if created_resources.total_count %}
 <article class="panel created-resources-panel" style="margin-bottom: 20px; border-left: 4px solid var(--accent, #ff6100);">
@@ -125,7 +211,7 @@
 
 <article class="panel conversation-panel {% if not conversation %}mcp-only-panel{% endif %}">
   <div class="panel-head conversation-head">
-    <div><p class="eyebrow">{% if conversation %}Conversation and operations{% else %}MCP operations{% endif %}</p><h2>{% if conversation %}Conversation history{% else %}Operation activity{% endif %}</h2></div>
+    <div><p class="eyebrow">{% if session.turns.count %}Conversation and operations{% else %}MCP activity only{% endif %}</p><h2>{% if session.turns.count %}Conversation history{% else %}Operation activity & Turns{% endif %}</h2></div>
     <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ total_operations_count|default:unassigned_operations|length }} operations{% endif %}</span>
   </div>
   <div class="conversation-toolbar" aria-label="Operation view controls">
@@ -144,12 +230,30 @@
   </div>
   <div class="conversation-stream">
     {% for item in conversation %}
-      <div class="turn-divider"><span>Turn {{ item.turn.sequence_no }}</span><i></i><small>{{ item.turn.started_at|date:"H:i:s" }} · {{ item.turn.duration_ms|floatformat:0 }} ms</small></div>
+      {% if item.turn.gap_before_formatted %}
+        <div class="turn-gap-indicator" style="display: flex; align-items: center; justify-content: center; margin: 18px 0 10px;">
+          <span style="background: rgba(234, 179, 8, 0.15); color: #eab308; font-size: 0.78rem; font-weight: 700; padding: 4px 14px; border-radius: 999px; border: 1px dashed rgba(234, 179, 8, 0.4);">
+            ⏳ Turlar Arası Kullanıcı Beklemesi / Duraksama: +{{ item.turn.gap_before_formatted }} (Aktif Süreden Düşüldü)
+          </span>
+        </div>
+      {% endif %}
+
+      <div class="turn-divider">
+        <span>
+          Turn {{ item.turn.sequence_no }}
+          {% if item.turn.is_synthetic %}
+            <small style="background: rgba(124, 90, 199, 0.18); color: #c084fc; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px;">Otomatik Algılanan İşlem Döngüsü</small>
+          {% endif %}
+        </span>
+        <i></i>
+        <small>{{ item.turn.started_at|date:"H:i:s" }} · {{ item.turn.duration_ms|floatformat:0 }} ms</small>
+      </div>
+
       <div class="chat-message user-message">
-        <div class="chat-avatar user-avatar">S</div>
+        <div class="chat-avatar user-avatar">{% if item.turn.is_synthetic %}⚡{% else %}S{% endif %}</div>
         <div class="chat-body">
-          <div class="chat-meta"><strong>You</strong><span>User request</span></div>
-          <div class="message-text">{{ item.turn.question|default:"Question text was not recorded." }}</div>
+          <div class="chat-meta"><strong>{% if item.turn.is_synthetic %}İşlem Amacı / Saptanan İstek{% else %}You (Kullanıcı İsteği){% endif %}</strong><span>User request / Intent</span></div>
+          <div class="message-text" style="font-weight: 500;">{{ item.turn.question|default:"İşlem döngüsü başlatıldı." }}</div>
         </div>
       </div>
 
@@ -159,6 +263,19 @@
           <div class="activity-content">
             <div class="activity-title"><span class="pulse-icon">✦</span><strong>Agent activity</strong><small>{{ item.operations|length }} operations</small></div>
             {% for operation in item.operations %}
+              {% if operation.gap_before_ms > 400 %}
+                <div class="operation-gap-badge" style="display: flex; align-items: center; justify-content: center; margin: 8px 0; font-size: 0.72rem;">
+                  {% if operation.gap_type == 'user_wait' %}
+                    <span style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px dashed rgba(234, 179, 8, 0.4); padding: 2px 10px; border-radius: 999px; font-weight: 600;">
+                      👤 Kullanıcı Onay/Yanıt Bekleme: +{{ operation.gap_formatted }} (İzole Edildi)
+                    </span>
+                  {% else %}
+                    <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); padding: 2px 10px; border-radius: 999px; font-weight: 600;">
+                      🧠 LLM Düşünme & Sentez: +{{ operation.gap_formatted }}
+                    </span>
+                  {% endif %}
+                </div>
+              {% endif %}
               {% include "components/operation_card.html" %}
             {% endfor %}
           </div>
@@ -254,4 +371,197 @@
     }));
   })();
 </script>
+<section>
+
+<style>
+  #ai-modal {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #e6edf3;
+  }
+  #ai-analysis-content {
+    color: #cbd5e1;
+    font-size: 0.92rem;
+    line-height: 1.7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  #ai-analysis-content h1,
+  #ai-analysis-content h2,
+  #ai-analysis-content h3,
+  #ai-analysis-content h4 {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-top: 1.3rem;
+    margin-bottom: 0.6rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+  #ai-analysis-content h2 {
+    font-size: 1.15rem;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #ai-analysis-content h3 {
+    font-size: 1.02rem;
+    color: #f1f5f9;
+  }
+  #ai-analysis-content p {
+    margin-top: 0;
+    margin-bottom: 0.85rem;
+    color: #cbd5e1;
+  }
+  #ai-analysis-content strong {
+    color: #ffffff;
+    font-weight: 600;
+  }
+  #ai-analysis-content ul, 
+  #ai-analysis-content ol {
+    padding-left: 1.4rem;
+    margin-top: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  #ai-analysis-content li {
+    margin-bottom: 0.5rem;
+    color: #cbd5e1;
+  }
+  #ai-analysis-content li strong {
+    color: #f8fafc;
+  }
+  #ai-analysis-content hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.5) 0%, rgba(255, 255, 255, 0.08) 100%);
+    margin: 1.4rem 0;
+  }
+  #ai-analysis-content code {
+    background: rgba(168, 85, 247, 0.15);
+    color: #d8b4fe;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.86em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+  }
+  #ai-analysis-content pre {
+    background: #111217;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    overflow-x: auto;
+  }
+  #ai-analysis-content pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: #e2e8f0;
+  }
+  #ai-analysis-content blockquote {
+    border-left: 3px solid #a855f7;
+    margin: 1rem 0;
+    padding: 0.5rem 0 0.5rem 1rem;
+    color: #94a3b8;
+    background: rgba(168, 85, 247, 0.05);
+    border-radius: 0 6px 6px 0;
+  }
+</style>
+
+<!-- AI Analysis Drawer / Modal -->
+<div id="ai-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter: blur(2px); z-index:9998; opacity:0; transition: opacity 0.2s;" onclick="closeAIModal()"></div>
+<div id="ai-modal" style="display:none; position:fixed; top:20px; right:20px; bottom:20px; width:680px; max-width:92vw; background:#181920; border:1px solid rgba(255, 255, 255, 0.12); border-radius:14px; box-shadow:0 20px 50px rgba(0,0,0,0.6); z-index:9999; transform:translateX(120%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); display:flex; flex-direction:column;">
+  <div style="padding:16px 20px; border-bottom:1px solid rgba(255, 255, 255, 0.08); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(180deg, rgba(168, 85, 247, 0.08) 0%, rgba(24, 25, 32, 0) 100%); border-radius:14px 14px 0 0;">
+    <div>
+      <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#ffffff; display:flex; align-items:center; gap:8px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        Gemini AI Analizi
+      </h3>
+      <p id="model-quota-badge" style="margin:4px 0 0 0; font-size:0.78rem; color:#94a3b8;">
+        RPD: <strong id="badge-rpd" style="color:#4ade80;">500 / 500</strong> Kalan · <strong id="badge-rpm" style="color:#a855f7;">15 RPM</strong>
+      </p>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <select id="model-selector" form="ai-form" name="model" onchange="updateModelBadge(this)" style="background:#222430; color:#f1f5f9; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 12px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer;">
+        {% for st in ai_model_stats_list %}
+          <option value="{{ st.id }}" data-rpd="{{ st.remaining }}/{{ st.rpd }}" data-rpm="{{ st.rpm }}" {% if st.id == "gemini-3.5-flash-lite" %}selected{% endif %}>
+            {{ st.name }} ({{ st.remaining }}/{{ st.rpd }} Kalan)
+          </option>
+        {% endfor %}
+      </select>
+      <button type="button" class="icon-button" onclick="closeAIModal()" style="border:none; background:rgba(255,255,255,0.05); border-radius:8px; padding:6px; cursor:pointer; color:#94a3b8;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+  </div>
+  
+  <div id="ai-analysis-content" style="flex:1; overflow-y:auto; padding:24px; font-size:0.92rem; line-height:1.7;">
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#94a3b8;">
+      <p style="text-align:center;">Analiz başlatmak için modeli seçip <strong>"Analiz Et"</strong> butonuna basın.<br><span style="font-size:0.8rem; color:#64748b;">(Dilerseniz alttaki kutudan spesifik soru da sorabilirsiniz)</span></p>
+    </div>
+  </div>
+  
+  <div style="padding:16px 20px; border-top:1px solid rgba(255, 255, 255, 0.08); background:#121318; border-radius:0 0 14px 14px;">
+    <form id="ai-form" hx-get="{% url 'session-ai-analysis' session.id %}" hx-target="#ai-analysis-content" style="display:flex; gap:10px;">
+      <input type="text" name="question" placeholder="Soru sor (Örn: Neden bu kadar sürdü?)" style="flex:1; padding:11px 16px; border-radius:8px; border:1px solid rgba(255, 255, 255, 0.12); background:#1c1d25; color:#ffffff; font-size:0.9rem; outline:none;">
+      <button type="submit" id="ai-submit-btn" class="button" style="background:linear-gradient(135deg, #7c5ac7 0%, #a855f7 100%); color:white; border:none; font-weight:600; padding:0 20px; border-radius:8px; cursor:pointer;">Analiz Et</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  function updateModelBadge(selectElem) {
+    const selectedOpt = selectElem.options[selectElem.selectedIndex];
+    const rpd = selectedOpt.getAttribute('data-rpd');
+    const rpm = selectedOpt.getAttribute('data-rpm');
+    document.getElementById('badge-rpd').innerText = rpd;
+    document.getElementById('badge-rpm').innerText = rpm + ' RPM';
+  }
+
+  document.body.addEventListener('htmx:beforeRequest', function(evt) {
+    if (evt.detail.elt.id === 'ai-form') {
+      const btn = document.getElementById('ai-submit-btn');
+      btn.innerHTML = 'Analiz Ediliyor...';
+      btn.disabled = true;
+    }
+  });
+  
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.elt.id === 'ai-form') {
+      const btn = document.getElementById('ai-submit-btn');
+      btn.innerHTML = 'Analiz Et';
+      btn.disabled = false;
+    }
+  });
+
+  function openAIModal() {
+    const modal = document.getElementById('ai-modal');
+    const overlay = document.getElementById('ai-modal-overlay');
+    const select = document.getElementById('model-selector');
+    if (select) updateModelBadge(select);
+    
+    modal.style.display = 'flex';
+    overlay.style.display = 'block';
+    
+    // Trigger reflow
+    void modal.offsetWidth;
+    
+    modal.style.transform = 'translateX(0)';
+    overlay.style.opacity = '1';
+  }
+  
+  function closeAIModal() {
+    const modal = document.getElementById('ai-modal');
+    const overlay = document.getElementById('ai-modal-overlay');
+    
+    modal.style.transform = 'translateX(120%)';
+    overlay.style.opacity = '0';
+    
+    setTimeout(() => {
+      modal.style.display = 'none';
+      overlay.style.display = 'none';
+    }, 300);
+  }
+</script>
+
 {% endblock %}

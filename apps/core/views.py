@@ -4,6 +4,9 @@ import json
 import mimetypes
 from pathlib import Path
 
+import markdown
+import google.generativeai as genai
+
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
@@ -17,10 +20,11 @@ from django.views.generic import DetailView, TemplateView
 from apps.findings.models import Annotation, Finding
 from apps.ingestion.models import IngestionSource, QuarantinedEvent, RawEvent
 from apps.traces.models import Session, Span, ToolCall, Turn
+from apps.core.models import AITelemetryUsage
 
 from .experiment_metrics import IMAGE_EXTENSIONS, experiment_image_rows, experiment_run_rows, experiment_summary, scenario_rows
 from .metrics import cost_by_model, overview_metrics, platform_breakdown_metrics, session_timeseries, tool_metrics
-from .presentation import operation_card, pretty_payload, session_created_resources
+from .presentation import operation_card, pretty_payload, reconstruct_synthetic_turns, session_created_resources, session_timing_breakdown
 from .template_analytics import (
     filter_templates,
     get_cross_similarity_analysis_data,
@@ -90,8 +94,15 @@ class SessionListView(TemplateView):
             F("started_at").desc(nulls_last=True),
         ), 50)
         page_obj = paginator.get_page(params.get("page"))
+        session_ids = [item.id for item in page_obj]
+        spans_by_session: dict = {}
+        if session_ids:
+            for span in Span.objects.filter(session_id__in=session_ids).order_by("started_at"):
+                spans_by_session.setdefault(span.session_id, []).append(span)
+
         for item in page_obj:
             item.created_resources = session_created_resources(item)
+            item.timing_breakdown = session_timing_breakdown(item, spans_by_session.get(item.id, []))
         context["page_obj"] = page_obj
         context["platform_counts"] = {
             "all": base_query.count(),
@@ -129,6 +140,8 @@ class SessionDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         session = self.object
         context["created_resources"] = session_created_resources(session)
+        context["ai_model_stats"] = AITelemetryUsage.get_today_stats()
+        context["ai_model_stats_list"] = list(context["ai_model_stats"].values())
         spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
         origin = session.started_at or next((span.started_at for span in spans if span.started_at), None)
         waterfall = []
@@ -152,17 +165,21 @@ class SessionDetailView(DetailView):
                 request_id = event.payload.get("request_id")
                 if request_id in request_ids:
                     raw_events_by_request.setdefault(request_id, []).append(event.payload)
-        operations_by_turn = {}
-        for span in spans:
-            if span.turn_id:
-                operations_by_turn.setdefault(span.turn_id, []).append(operation_card(span, raw_events_by_request.get(span.request_id)))
-        context["conversation"] = [
-            {"turn": turn, "operations": operations_by_turn.get(turn.id, [])}
-            for turn in session.turns.all()
-        ]
-        all_unassigned = [
-            operation_card(span, raw_events_by_request.get(span.request_id)) for span in spans if not span.turn_id
-        ]
+        if session.turns.exists():
+            operations_by_turn = {}
+            for span in spans:
+                if span.turn_id:
+                    operations_by_turn.setdefault(span.turn_id, []).append(operation_card(span, raw_events_by_request.get(span.request_id)))
+            context["conversation"] = [
+                {"turn": turn, "operations": operations_by_turn.get(turn.id, [])}
+                for turn in session.turns.all()
+            ]
+            all_unassigned = [
+                operation_card(span, raw_events_by_request.get(span.request_id)) for span in spans if not span.turn_id
+            ]
+        else:
+            context["conversation"] = reconstruct_synthetic_turns(spans, raw_events_by_request)
+            all_unassigned = []
         op_paginator = Paginator(all_unassigned, 50)
         op_page_obj = op_paginator.get_page(self.request.GET.get("op_page"))
         context["total_operations_count"] = len(all_unassigned)
@@ -173,6 +190,7 @@ class SessionDetailView(DetailView):
             {"event": event, "pretty_payload": pretty_payload(event.payload)}
             for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at")
         ]
+        context["timing_breakdown"] = session_timing_breakdown(session, spans)
         context["active_nav"] = "sessions"
         return context
 
@@ -617,3 +635,103 @@ class SessionExportMarkdownView(View):
         response = HttpResponse("\n".join(lines), content_type="text/markdown; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="jotform_mcp_session_{short_id}.md"'
         return response
+
+
+class SessionAIAnalysisView(View):
+    def get(self, request, pk, *args, **kwargs):
+        session = Session.objects.get(pk=pk)
+        tools = ToolCall.objects.filter(span__session_id=session.id).select_related("span").order_by("span__started_at")
+        
+        tm_list = tool_metrics()
+        tm_dict = {item["name"]: item for item in tm_list}
+        tool_calls_payload = []
+        for tc in tools:
+            base = tm_dict.get(tc.tool_name, {})
+            p50 = base.get("p50", 0)
+            p95 = base.get("p95", 0)
+            comp = "Yok"
+            if p50 and tc.span.duration_ms:
+                if tc.span.duration_ms > p95:
+                    comp = "p95 sınırını aştı (Çok yavaş)"
+                elif tc.span.duration_ms > p50:
+                    comp = f"p50'den {tc.span.duration_ms - p50:.1f}ms yavaş"
+                else:
+                    comp = "p50'den daha hızlı"
+                    
+            tool_calls_payload.append({
+                "tool": tc.tool_name,
+                "duration_ms": tc.span.duration_ms,
+                "status": tc.span.status,
+                "historical_baseline": {"p50_ms": p50, "p95_ms": p95},
+                "comparison": comp
+            })
+            
+        findings = list(Finding.objects.filter(session=session).values("rule_code", "severity", "title"))
+        timing = session_timing_breakdown(session.id)
+        
+        payload = {
+            "session_id": session.external_session_id or str(session.id),
+            "platform": session.platform or session.provider,
+            "wall_duration_ms": timing.get("wall_duration_ms", 0),
+            "active_duration_ms": timing.get("active_duration_ms", 0),
+            "idle_gap_ms": timing.get("idle_gap_ms", 0),
+            "tool_calls": tool_calls_payload,
+            "http_breakdown": {
+                "total_http_ms": timing.get("jotform_api_ms", 0),
+                "llm_ms": timing.get("llm_active_ms", 0),
+                "mcp_ms": timing.get("mcp_internal_ms", 0)
+            },
+            "findings": findings
+        }
+        
+        prompt = f"""Sen Jotform MCP ve Agent sistemleri için uzman bir Observability & Telemetry Analistisin.
+
+GÖREV:
+Aşağıda verilen oturum telemetri verisini inceleyerek somut, verilere dayalı bir performans ve kök neden analizi sunmak.
+
+ANALİZ KURALLARI:
+1. Tahmin veya varsayım yapma; sadece sağlanan log, süre ve durum kodlarına dayan.
+2. 50 ms altı süren başarısız tool çağrılarını "Hızlı Validasyon Hatası (Fast Rejection)" olarak işaretle ve tarihsel p50/p95 ortalamalarından muaf tut.
+3. Tool sürelerini tarihsel p50 (medyan) ile kıyasla.
+4. Dış API (Jotform Cloud) süresi ile yerel MCP/LLM süresini net olarak ayrıştır.
+5. Varsa finding'lerin neden oluştuğunu ve nasıl önleneceğini belirt.
+
+ÇIKTI FORMATI (Lütfen tam olarak bu Markdown başlıklarını ve madde işaretlerini kullan):
+### ⏱️ Gecikme & Kıyaslama
+* Tool'ların geçmiş p50 değerine göre durumu (Madde imleri ile listeleyin)
+
+### 🌐 Sistem & API Durumu
+* Zamanın nereye harcandığı, HTTP ve LLM süre kırılımları
+
+### ⚠️ Anomali & Validasyon
+* Varsa hızlı hatalar, gereksiz tekrarlar veya açık finding'ler
+
+### 💡 Mühendislik Önerisi
+* Somut olarak neyin optimize edilmesi gerektiği
+
+PAYLOAD:
+{json.dumps(payload, indent=2, ensure_ascii=False)}
+"""
+        
+        user_question = request.GET.get("question", "").strip()
+        if user_question:
+            prompt += f"\n\nKULLANICI ÖZEL SORUSU:\n{user_question}\n(Lütfen analizine ek olarak bu soruya da spesifik bir yanıt ver.)"
+
+
+        api_key = getattr(settings, "GEMINI_API_KEY", "")
+        if not api_key:
+            html = "<div class='notice error' style='margin-bottom:0;'><strong>GEMINI_API_KEY bulunamadı.</strong> Lütfen <code>config/settings.py</code> veya ortam değişkenlerini kontrol edin.</div>"
+            return HttpResponse(html)
+
+        selected_model = request.GET.get("model", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        try:
+            AITelemetryUsage.increment(selected_model)
+            genai.configure(api_key=api_key, transport="rest")
+            model = genai.GenerativeModel(selected_model)
+            response = model.generate_content(prompt)
+            md_text = response.text
+            html_content = markdown.markdown(md_text, extensions=['fenced_code', 'tables'])
+        except Exception as e:
+            html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Analiz Hatası ({selected_model}):</strong> {e}</div>"
+
+        return HttpResponse(html_content)

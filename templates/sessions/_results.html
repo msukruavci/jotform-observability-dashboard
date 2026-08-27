@@ -10,7 +10,7 @@
   </div>
   <article class="panel flush">
     <div class="table-wrap"><table>
-      <thead><tr><th>Session</th><th>Type</th><th>Provider / model</th><th>Status</th><th>Correlation</th><th class="num">Turns</th><th class="num">Operations</th><th class="num">Duration</th></tr></thead>
+      <thead><tr><th>Session</th><th>Type</th><th>Provider / model</th><th>Status</th><th>Correlation</th><th class="num">Turns</th><th class="num">Operations</th><th class="num" title="Active execution time (LLM + MCP + Jotform API) excluding idle pauses">Active Duration</th></tr></thead>
       <tbody>
         {% for session in page_obj %}
           <tr>
@@ -55,7 +55,30 @@
             <td data-label="Correlation"><span class="confidence confidence-{{ session.correlation_confidence }}">{{ session.correlation_confidence }}</span></td>
             <td class="num" data-label="Turn">{{ session.turn_count }}</td>
             <td class="num" data-label="Operations">{{ session.span_count }}</td>
-            <td class="num mono" data-label="Duration">{{ session.duration_ms|floatformat:0|default:"—" }} ms</td>
+            <td class="num mono session-duration-cell" data-label="Duration" style="min-width: 160px;">
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  {% if session.timing_breakdown.has_idle_gap %}
+                    <span title="⚠️ {{ session.timing_breakdown.idle_gap_formatted }} idle/suspicious pause excluded from active duration" style="background: rgba(234, 179, 8, 0.18); color: #eab308; font-size: 0.68rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: help;">
+                      ⚠️ +{{ session.timing_breakdown.idle_gap_formatted }} idle
+                    </span>
+                  {% endif %}
+                  <strong style="font-size: 0.88rem; color: var(--ink, #fff);">{{ session.timing_breakdown.active_duration_formatted|default:"—" }}</strong>
+                </div>
+                {% if session.timing_breakdown.active_duration_ms > 0 %}
+                  <div class="timing-mini-bar" style="display: flex; width: 100%; height: 4px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08); margin-top: 2px;" title="🟣 LLM: {{ session.timing_breakdown.llm_active_formatted }} ({{ session.timing_breakdown.pct_llm }}%) | 🌐 Jotform API: {{ session.timing_breakdown.jotform_api_formatted }} ({{ session.timing_breakdown.pct_api }}%) | ⚙️ MCP: {{ session.timing_breakdown.mcp_internal_formatted }} ({{ session.timing_breakdown.pct_mcp }}%)">
+                    <div style="width: {{ session.timing_breakdown.pct_llm }}%; background: #a855f7;"></div>
+                    <div style="width: {{ session.timing_breakdown.pct_api }}%; background: #22c55e;"></div>
+                    <div style="width: {{ session.timing_breakdown.pct_mcp }}%; background: #ff6100;"></div>
+                  </div>
+                  <div style="display: flex; gap: 5px; font-size: 0.68rem; color: var(--muted, #8b949e); margin-top: 1px;">
+                    <span style="color: #c084fc;">LLM {{ session.timing_breakdown.pct_llm }}%</span>
+                    <span style="color: #4ade80;">API {{ session.timing_breakdown.pct_api }}%</span>
+                    <span style="color: #fb923c;">MCP {{ session.timing_breakdown.pct_mcp }}%</span>
+                  </div>
+                {% endif %}
+              </div>
+            </td>
           </tr>
         {% empty %}
           <tr><td class="empty" colspan="8">No traceable sessions match these filters.</td></tr>
