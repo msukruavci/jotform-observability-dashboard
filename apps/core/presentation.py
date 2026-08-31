@@ -4,84 +4,169 @@ import json
 from typing import Any
 
 
+import re
+
+
 def parse_json_string(value: Any) -> Any:
     if not isinstance(value, str):
         return value
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
+    trimmed = value.strip()
+    if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+        try:
+            return json.loads(trimmed)
+        except (json.JSONDecodeError, TypeError):
+            return value
+    return value
+
+
+def clean_and_normalize_data(value: Any, depth: int = 0) -> Any:
+    """
+    Recursively normalizes data by parsing nested JSON strings, decoding MCP tool response
+    wrappers, and recovering clean previews from truncated audit log entries.
+    """
+    if depth > 12:
         return value
 
-
-def pretty_payload(value: Any, *, max_chars: int = 8000) -> str:
     value = parse_json_string(value)
+
     if isinstance(value, str):
-        rendered = value
+        trimmed = value.strip()
+        if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+            try:
+                parsed = json.loads(trimmed)
+                return clean_and_normalize_data(parsed, depth + 1)
+            except Exception:
+                pass
+        return value
+
+    if isinstance(value, dict):
+        # Handle truncated audit log preview objects: {"truncated": True, "chars": ..., "preview": "..."}
+        if value.get("truncated") and "preview" in value and len(value) <= 4:
+            preview_val = value["preview"]
+            if isinstance(preview_val, str):
+                # Try direct json decode
+                trimmed_p = preview_val.strip()
+                if (trimmed_p.startswith("{") and trimmed_p.endswith("}")) or (trimmed_p.startswith("[") and trimmed_p.endswith("]")):
+                    try:
+                        parsed = json.loads(trimmed_p)
+                        return clean_and_normalize_data(parsed, depth + 1)
+                    except Exception:
+                        pass
+                # Check for MCP text wrapper inside preview: "text": "{\n  ...
+                m = re.search(r"\"text\":\s*\"(.*)", preview_val, re.DOTALL)
+                if m:
+                    raw_inner = m.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+                    try:
+                        parsed_inner = json.loads(raw_inner)
+                        return clean_and_normalize_data(parsed_inner, depth + 1)
+                    except Exception:
+                        return raw_inner
+                # Check for escaped JSON string starting with "{\"
+                if preview_val.startswith('"{\\') or preview_val.startswith('"{'):
+                    try:
+                        unescaped = json.loads(preview_val)
+                        return clean_and_normalize_data(unescaped, depth + 1)
+                    except Exception:
+                        pass
+
+        # Handle MCP content wrapper: {"content": [{"type": "text", "text": "..."}]}
+        if "content" in value and isinstance(value["content"], list) and len(value["content"]) == 1:
+            item = value["content"][0]
+            if isinstance(item, dict) and item.get("type") == "text" and "text" in item:
+                text_val = item["text"]
+                if isinstance(text_val, str):
+                    trimmed_t = text_val.strip()
+                    if (trimmed_t.startswith("{") and trimmed_t.endswith("}")) or (trimmed_t.startswith("[") and trimmed_t.endswith("]")):
+                        try:
+                            parsed_inner = json.loads(trimmed_t)
+                            return clean_and_normalize_data(parsed_inner, depth + 1)
+                        except Exception:
+                            pass
+                    return text_val
+
+        return {k: clean_and_normalize_data(v, depth + 1) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [clean_and_normalize_data(item, depth + 1) for item in value]
+
+    return value
+
+
+def pretty_payload(value: Any, *, max_chars: int = 60000) -> str:
+    if value is None or value == "":
+        return "{}"
+
+    normalized = clean_and_normalize_data(value)
+
+    if isinstance(normalized, str):
+        rendered = normalized
     else:
-        rendered = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+        rendered = json.dumps(normalized, ensure_ascii=False, indent=2, default=str)
+
     if len(rendered) <= max_chars:
         return rendered
+
     hidden = len(rendered) - max_chars
     return f"{rendered[:max_chars]}\n\n... {hidden:,} more characters hidden"
 
 
-def human_value(value: Any, *, max_chars: int = 500) -> str:
-    value = parse_json_string(value)
-    if value is None or value == "":
+def human_value(value: Any, *, max_chars: int = 8000) -> str:
+    normalized = clean_and_normalize_data(value)
+    if normalized is None or normalized == "":
         return "—"
-    if isinstance(value, bool):
-        return "Yes" if value else "No"
-    if isinstance(value, (int, float)):
-        return str(value)
-    if isinstance(value, list) and all(not isinstance(item, (dict, list)) for item in value):
-        rendered = ", ".join(str(item) for item in value) or "—"
-    elif isinstance(value, dict) and not value:
+    if isinstance(normalized, bool):
+        return "Yes" if normalized else "No"
+    if isinstance(normalized, (int, float)):
+        return str(normalized)
+    if isinstance(normalized, list) and all(not isinstance(item, (dict, list)) for item in normalized):
+        rendered = ", ".join(str(item) for item in normalized) or "—"
+    elif isinstance(normalized, dict) and not normalized:
         return "No parameters"
-    elif isinstance(value, (dict, list)):
-        rendered = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    elif isinstance(normalized, (dict, list)):
+        rendered = json.dumps(normalized, ensure_ascii=False, indent=2, default=str)
     else:
-        rendered = str(value)
+        rendered = str(normalized)
     return rendered if len(rendered) <= max_chars else f"{rendered[:max_chars]}…"
 
 
 def compact_nested_value(value: Any) -> str:
-    value = parse_json_string(value)
-    if isinstance(value, dict):
-        keys = [str(key).replace("_", " ") for key in value.keys()]
-        preview = ", ".join(keys[:3])
+    normalized = clean_and_normalize_data(value)
+    if isinstance(normalized, dict):
+        keys = [str(key).replace("_", " ") for key in normalized.keys()]
+        preview = ", ".join(keys[:6])
         suffix = f": {preview}" if preview else ""
-        return f"Object · {len(value)} fields{suffix}"
-    if isinstance(value, list):
-        return f"List · {len(value)} items"
-    return human_value(value)
+        return f"Object · {len(normalized)} fields{suffix}"
+    if isinstance(normalized, list):
+        return f"List · {len(normalized)} items"
+    return human_value(normalized)
 
 
-def payload_fields(value: Any, *, max_items: int = 18, compact_nested: bool = False) -> list[dict[str, str]]:
-    value = parse_json_string(value)
-    if not isinstance(value, dict):
-        return [{"name": "Value", "value": human_value(value)}]
+def payload_fields(value: Any, *, max_items: int = 50, compact_nested: bool = False) -> list[dict[str, str]]:
+    normalized = clean_and_normalize_data(value)
+    if not isinstance(normalized, dict):
+        return [{"name": "Value", "value": human_value(normalized)}]
     render = compact_nested_value if compact_nested else human_value
-    fields = [{"name": str(key).replace("_", " "), "value": render(item)} for key, item in list(value.items())[:max_items]]
-    if len(value) > max_items:
-        fields.append({"name": "More", "value": f"{len(value) - max_items} fields hidden"})
+    fields = [{"name": str(key).replace("_", " "), "value": render(item)} for key, item in list(normalized.items())[:max_items]]
+    if len(normalized) > max_items:
+        fields.append({"name": "More", "value": f"{len(normalized) - max_items} fields hidden"})
     return fields
 
 
 def result_summary(value: Any) -> str:
-    value = parse_json_string(value)
-    if isinstance(value, dict):
-        if value.get("error"):
-            return human_value(value["error"], max_chars=160)
+    normalized = clean_and_normalize_data(value)
+    if isinstance(normalized, dict):
+        if normalized.get("error"):
+            return human_value(normalized["error"], max_chars=400)
         for key in ("message", "hint", "title", "status"):
-            if value.get(key):
-                return human_value(value[key], max_chars=160)
-        non_empty = [key for key, item in value.items() if item not in (None, "", [], {})]
+            if normalized.get(key):
+                return human_value(normalized[key], max_chars=400)
+        non_empty = [key for key, item in normalized.items() if item not in (None, "", [], {})]
         if non_empty:
-            return f"Returned {len(non_empty)} fields: {', '.join(non_empty[:4])}"
+            return f"Returned {len(non_empty)} fields: {', '.join(non_empty[:6])}"
         return "Empty successful response"
-    if isinstance(value, list):
-        return f"Returned {len(value)} items"
-    text = human_value(value, max_chars=160)
+    if isinstance(normalized, list):
+        return f"Returned {len(normalized)} items"
+    text = human_value(normalized, max_chars=400)
     return text or "Response received"
 
 
@@ -97,7 +182,6 @@ def clean_payload(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def exchange_message(*, sender: str, receiver: str, label: str, payload: Any, role: str, meta: str = "") -> dict[str, Any]:
-    payload = parse_json_string(payload)
     return {
         "sender": sender,
         "receiver": receiver,
@@ -105,7 +189,7 @@ def exchange_message(*, sender: str, receiver: str, label: str, payload: Any, ro
         "role": role,
         "meta": meta,
         "fields": payload_fields(payload, max_items=8, compact_nested=True),
-        "raw": pretty_payload(payload, max_chars=4000),
+        "raw": pretty_payload(payload, max_chars=30000),
     }
 
 
@@ -459,7 +543,7 @@ def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[st
             args = tool_obj.arguments if tool_obj and isinstance(tool_obj.arguments, dict) else {}
             candidate = args.get("intent") or args.get("query") or args.get("form_prompt") or args.get("reason") or args.get("title")
             if candidate:
-                detected_intent = str(candidate)[:140]
+                detected_intent = str(candidate).strip()
                 break
         if not detected_intent:
             tool_names = [sp.name for sp in t_spans if sp.kind == "tool"]

@@ -432,3 +432,122 @@ class ViewTests(TestCase):
         modal_resp = self.client.get(reverse("template-detail-modal", args=["non-existent-id"]))
         self.assertEqual(modal_resp.status_code, 200)
         self.assertTemplateUsed(modal_resp, "templates/_detail_modal.html")
+
+    def test_tool_intelligence_overview_and_modal(self):
+        span = Span.objects.create(
+            session=self.session, trace_id="trace-tool-intel", kind="tool",
+            name="list_workflows", status="ok", started_at=timezone.now(), duration_ms=250,
+        )
+        ToolCall.objects.create(
+            span=span, tool_name="list_workflows", arguments={"limit": 10},
+            result={"workflows": [{"id": "1", "title": "Test"}]},
+            argument_hash=digest({"limit": 10}), result_hash=digest({"workflows": []}),
+            result_bytes=80,
+        )
+
+        # 1. Overview page
+        response = self.client.get(reverse("tool-intelligence"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "tools/overview.html")
+        self.assertContains(response, "Tool Intelligence &amp; Invocations")
+        self.assertContains(response, "list_workflows")
+
+        # 2. Tool Detail Modal endpoint
+        modal_resp = self.client.get(reverse("tool-detail-modal", args=["list_workflows"]))
+        self.assertEqual(modal_resp.status_code, 200)
+        self.assertTemplateUsed(modal_resp, "tools/_detail_modal.html")
+        self.assertContains(modal_resp, "list_workflows")
+        self.assertContains(modal_resp, "Adım Adım Tüm Çağrılmalar")
+
+        # 3. Tool Detail page endpoint
+        detail_resp = self.client.get(reverse("tool-detail", args=["list_workflows"]))
+        self.assertEqual(detail_resp.status_code, 200)
+        self.assertTemplateUsed(detail_resp, "tools/overview.html")
+
+    def test_time_filter_presets_across_pages(self):
+        # Create an older session (5 days ago) and a recent session (10 minutes ago)
+        now = timezone.now()
+        s_old = Session.objects.create(
+            workspace=self.session.workspace, external_session_id="s-old-5d",
+            provider="claude", model="claude-3-7-sonnet", status="ok", duration_ms=800,
+            started_at=now - timedelta(days=5),
+        )
+        s_recent = Session.objects.create(
+            workspace=self.session.workspace, external_session_id="s-recent-10m",
+            provider="gpt", model="gpt-4o", status="ok", duration_ms=300,
+            started_at=now - timedelta(minutes=10),
+        )
+        # Create spans for tools
+        Span.objects.create(session=s_old, trace_id="t-old", kind="tool", name="list_workflows", status="ok", started_at=s_old.started_at)
+        Span.objects.create(session=s_recent, trace_id="t-rec", kind="tool", name="list_workflows", status="ok", started_at=s_recent.started_at)
+
+        # 1. Test Overview with 1h filter (should contain recent, exclude old)
+        resp_1h = self.client.get(reverse("overview") + "?range=1h")
+        self.assertEqual(resp_1h.status_code, 200)
+        self.assertEqual(resp_1h.context["active_time_range"], "1h")
+        self.assertContains(resp_1h, "Son 1 Saat")
+
+        # 2. Test Sessions list with 24h filter
+        resp_sessions_24h = self.client.get(reverse("session-list") + "?range=24h")
+        self.assertEqual(resp_sessions_24h.status_code, 200)
+        self.assertContains(resp_sessions_24h, "s-recent-10m")
+        self.assertNotContains(resp_sessions_24h, "s-old-5d")
+
+        # 3. Test Sessions list with 7d filter (both should be present)
+        resp_sessions_7d = self.client.get(reverse("session-list") + "?range=7d")
+        self.assertEqual(resp_sessions_7d.status_code, 200)
+        self.assertContains(resp_sessions_7d, "s-recent-10m")
+        self.assertContains(resp_sessions_7d, "s-old-5d")
+
+        # 4. Test Tool Intelligence with 1h vs 7d
+        resp_tools_1h = self.client.get(reverse("tool-intelligence") + "?range=1h")
+        self.assertEqual(resp_tools_1h.status_code, 200)
+        self.assertEqual(resp_tools_1h.context["active_time_range"], "1h")
+
+    def test_tool_multi_field_filtering_and_partial(self):
+        span1 = Span.objects.create(
+            session=self.session, trace_id="trace-f1", kind="tool",
+            name="build_workflow_bulk", status="ok", duration_ms=250,
+        )
+        ToolCall.objects.create(
+            span=span1, tool_name="build_workflow_bulk", arguments={"title": "Leave Workflow"},
+            result={"workflow_id": "111"}, argument_hash="h1", result_hash="r1", is_error=False,
+        )
+        span2 = Span.objects.create(
+            session=self.session, trace_id="trace-f2", kind="tool",
+            name="build_workflow_bulk", status="error", duration_ms=6200,
+        )
+        ToolCall.objects.create(
+            span=span2, tool_name="build_workflow_bulk", arguments={"title": "Expense Approval"},
+            result={"error": "Failed step"}, argument_hash="h2", result_hash="r2", is_error=True,
+        )
+
+        # 1. Filter by status=error
+        resp_err = self.client.get(reverse("tool-detail-modal", args=["build_workflow_bulk"]) + "?status=error")
+        self.assertEqual(resp_err.status_code, 200)
+        self.assertContains(resp_err, "Expense Approval")
+        self.assertNotContains(resp_err, "Leave Workflow")
+
+        # 2. Filter by status=ok
+        resp_ok = self.client.get(reverse("tool-detail-modal", args=["build_workflow_bulk"]) + "?status=ok")
+        self.assertEqual(resp_ok.status_code, 200)
+        self.assertContains(resp_ok, "Leave Workflow")
+        self.assertNotContains(resp_ok, "Expense Approval")
+
+        # 3. Filter by search query in JSON
+        resp_q = self.client.get(reverse("tool-detail-modal", args=["build_workflow_bulk"]) + "?q=Leave")
+        self.assertEqual(resp_q.status_code, 200)
+        self.assertContains(resp_q, "Leave Workflow")
+        self.assertNotContains(resp_q, "Expense Approval")
+
+        # 4. HTMX partial request for invocations_list
+        resp_partial = self.client.get(
+            reverse("tool-detail-modal", args=["build_workflow_bulk"]) + "?target=invocations_list&q=Expense",
+            HTTP_HX_REQUEST="true",
+        )
+        self.assertEqual(resp_partial.status_code, 200)
+        self.assertTemplateUsed(resp_partial, "tools/_invocations_list.html")
+        self.assertContains(resp_partial, "Expense Approval")
+
+
+

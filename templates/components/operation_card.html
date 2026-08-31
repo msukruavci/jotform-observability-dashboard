@@ -26,7 +26,14 @@
             <details class="exchange-raw">
               <summary><span>View JSON</span><span class="chevron">⌄</span></summary>
               <div class="json-code-shell">
-                <button class="json-copy" type="button" data-copy-json aria-label="Copy JSON">Copy</button>
+                <div class="json-toolbar">
+                  <span class="json-tag">JSON</span>
+                  <div class="json-actions">
+                    <button class="json-btn" type="button" data-wrap-json title="Toggle line wrap (Wrap / No-Wrap)">Wrap</button>
+                    <button class="json-btn" type="button" data-expand-json title="Toggle height expansion">Expand</button>
+                    <button class="json-btn json-copy" type="button" data-copy-json title="Copy formatted JSON">Copy</button>
+                  </div>
+                </div>
                 <pre class="json-viewer">{{ exchange.raw }}</pre>
               </div>
             </details>
@@ -41,9 +48,16 @@
     {% endif %}
     {% if not operation.exchanges %}
       <div class="developer-payload">
-        <div><span>Developer details</span><small>{{ operation.raw_label }}</small></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;"><span>Developer details</span><small>{{ operation.raw_label }}</small></div>
         <div class="json-code-shell">
-          <button class="json-copy" type="button" data-copy-json aria-label="Copy JSON">Copy</button>
+          <div class="json-toolbar">
+            <span class="json-tag">{{ operation.raw_label|default:"Payload" }}</span>
+            <div class="json-actions">
+              <button class="json-btn" type="button" data-wrap-json title="Toggle line wrap (Wrap / No-Wrap)">Wrap</button>
+              <button class="json-btn" type="button" data-expand-json title="Toggle height expansion">Expand</button>
+              <button class="json-btn json-copy" type="button" data-copy-json title="Copy formatted JSON">Copy</button>
+            </div>
+          </div>
           <pre class="json-viewer">{{ operation.raw }}</pre>
         </div>
       </div>

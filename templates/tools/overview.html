@@ -1,30 +1,343 @@
 {% extends "layouts/base.html" %}
-{% block title %}Tool intelligence{% endblock %}
+{% block title %}Tool Intelligence &amp; Analytics{% endblock %}
 {% block content %}
-<div class="page-head compact"><div><p class="eyebrow">Behavior analysis</p><h1>Tool intelligence</h1><p>Compare call frequency, tail latency, error rate, and result size for every tool.</p></div></div>
-<article class="panel"><div class="panel-head"><div><p class="eyebrow">Latency profile</p><h2>Call volume and p95 duration</h2></div></div><div id="tool-chart" class="chart tall" aria-label="Tool call volume and latency chart"></div></article>
-<article class="panel flush"><div class="table-wrap"><table><thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">p50</th><th class="num">p95</th><th class="num">Error rate</th><th class="num">Avg. response</th><th class="num">Findings</th></tr></thead><tbody>{% for tool in tool_metrics %}<tr><td><strong class="mono">{{ tool.name }}</strong></td><td class="num">{{ tool.count }}</td><td class="num mono">{{ tool.p50|floatformat:1 }} ms</td><td class="num mono">{{ tool.p95|floatformat:1 }} ms</td><td class="num">{{ tool.error_rate }}%</td><td class="num">{{ tool.avg_result_bytes }} B</td><td class="num">{{ tool.findings }}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No tool data is available yet.</td></tr>{% endfor %}</tbody></table></div></article>
+<div class="page-head compact">
+  <div>
+    <p class="eyebrow">Behavior &amp; Performance Analysis</p>
+    <h1>Tool Intelligence &amp; Invocations</h1>
+    <p>Tüm MCP araçlarının çağrı frekansları, p50/p95 gecikme profilleri, hata oranları, ardışık geçiş dizilimleri ve adım adım tüm geçmiş çağrı kayıtları.</p>
+  </div>
+  {% if active_time_label %}
+  <div class="page-head-actions">
+    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Overview KPI Cards -->
+<div class="metric-grid">
+  <article class="metric-card accent">
+    <p>Toplam Tool Çağrısı <span>⚡</span></p>
+    <strong>{{ total_invocations|default:0 }}</strong>
+    <small>Tüm oturumlarda gerçekleşen MCP tool invocation sayısı</small>
+  </article>
+  <article class="metric-card">
+    <p>Aktif Tool Sayısı <span class="positive">🧩</span></p>
+    <strong>{{ total_tools_count|default:0 }}</strong>
+    <small>Kayıtlı ve çağrılan benzersiz araç çeşitliliği</small>
+  </article>
+  <article class="metric-card">
+    <p>Genel Başarı Oranı <span>✓</span></p>
+    <strong>{{ overall_success_rate|default:"100.0" }}%</strong>
+    <small>{{ total_errors|default:0 }} hata / istisna kaydı</small>
+  </article>
+  <article class="metric-card">
+    <p>Genel Gecikme Profili <span>⏱️</span></p>
+    <strong>{{ overall_p50_ms|default:0 }} ms</strong>
+    <small>p50 (medyan) · p95: {{ overall_p95_ms|default:0 }} ms</small>
+  </article>
+</div>
+
+<!-- ECharts Chart Panel -->
+<article class="panel">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow">Latency &amp; Volume Profile</p>
+      <h2>Çağrı Hacmi ve p95 Gecikme Karşılaştırması</h2>
+    </div>
+    <span class="muted font-11">Grafikteki bir toola tıklayarak detaylı istatistik ve çağrı geçmişini açabilirsiniz.</span>
+  </div>
+  <div id="tool-chart" class="chart tall" aria-label="Tool call volume and latency chart"></div>
+</article>
+
+<!-- Interactive Tools Catalog & Filter Bar -->
+<article class="panel flush">
+  <div class="panel-head" style="padding: 16px 20px; border-bottom: 1px solid var(--line); flex-direction: column; align-items: stretch; gap: 14px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <p class="eyebrow">Tool Kataloğu &amp; Detaylı İnceleme</p>
+        <h2 style="margin: 0; font-size: 16px;">Tüm MCP Araçları ({{ tool_metrics|length }})</h2>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <input
+          type="text"
+          id="tool-search-input"
+          placeholder="Ara (tool adı, kategori)..."
+          class="table-search-input"
+          oninput="filterToolTable()"
+        />
+      </div>
+    </div>
+
+    <!-- Category & Platform Filter Strip -->
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 8px; border-top: 1px dashed var(--line);">
+      <!-- Category Filter Pills -->
+      <div class="category-pills-row" style="display: flex; gap: 4px; flex-wrap: wrap;">
+        <button type="button" class="cat-pill active" data-cat="all" onclick="filterCategory('all', this)">Tüm Kategoriler</button>
+        <button type="button" class="cat-pill" data-cat="Discovery &amp; Search" onclick="filterCategory('Discovery &amp; Search', this)">Discovery</button>
+        <button type="button" class="cat-pill" data-cat="Building &amp; Workflow Setup" onclick="filterCategory('Building &amp; Workflow Setup', this)">Building</button>
+        <button type="button" class="cat-pill" data-cat="Forms &amp; Questions" onclick="filterCategory('Forms &amp; Questions', this)">Forms</button>
+        <button type="button" class="cat-pill" data-cat="Inspection &amp; Verification" onclick="filterCategory('Inspection &amp; Verification', this)">Inspect</button>
+        <button type="button" class="cat-pill" data-cat="Dangerous &amp; Mutating" onclick="filterCategory('Dangerous &amp; Mutating', this)">Dangerous</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tools-data-table">
+      <thead>
+        <tr>
+          <th>Tool Adı &amp; Kategori</th>
+          <th class="num">Çağrı Sayısı</th>
+          <th class="num">p50 (Medyan)</th>
+          <th class="num">p95 Gecikme</th>
+          <th class="num">Hata Oranı</th>
+          <th class="num">Ort. Yanıt Boyutu</th>
+          <th class="num">Bulgular</th>
+          <th style="text-align: right; width: 130px;">Detay</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tool in tool_metrics %}
+        <tr
+          class="clickable-tool-row"
+          data-tool-name="{{ tool.name }}"
+          data-category="{{ tool.category }}"
+          hx-get="{% url 'tool-detail-modal' tool.name %}"
+          hx-target="#modal-container"
+          hx-swap="innerHTML"
+          title="Detaylı istatistikleri ve çağrı geçmişini görüntüle"
+        >
+          <td>
+            <div class="tool-cell-content">
+              <span class="tool-row-icon">{{ tool.icon }}</span>
+              <div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <strong class="mono tool-name-label">{{ tool.name }}</strong>
+                  <span class="badge font-9" style="background: {{ tool.badge_color }}18; color: {{ tool.badge_color }}; border-color: {{ tool.badge_color }}33;">
+                    {{ tool.category }}
+                  </span>
+                </div>
+                <small class="tool-desc-preview muted font-11">{{ tool.description|truncatechars:65 }}</small>
+              </div>
+            </div>
+          </td>
+          <td class="num">
+            <strong>{{ tool.count }}</strong>
+          </td>
+          <td class="num mono">{{ tool.p50|floatformat:1 }} ms</td>
+          <td class="num mono">{{ tool.p95|floatformat:1 }} ms</td>
+          <td class="num">
+            {% if tool.error_rate == 0 %}
+            <span class="badge badge-success font-10">0%</span>
+            {% elif tool.error_rate < 5 %}
+            <span class="badge badge-warning font-10">{{ tool.error_rate }}%</span>
+            {% else %}
+            <span class="badge badge-danger font-10">{{ tool.error_rate }}%</span>
+            {% endif %}
+          </td>
+          <td class="num mono font-11">{{ tool.avg_result_bytes_formatted }}</td>
+          <td class="num">
+            {% if tool.findings > 0 %}
+            <span class="badge badge-warning font-10">{{ tool.findings }} bulgu</span>
+            {% else %}
+            <span class="muted font-11">—</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <button
+              type="button"
+              class="button secondary tiny"
+              hx-get="{% url 'tool-detail-modal' tool.name %}"
+              hx-target="#modal-container"
+              hx-swap="innerHTML"
+              onclick="event.stopPropagation();"
+            >
+              İncele ↗
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">Henüz tool kullanım verisi bulunmuyor.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
 {% endblock %}
+
 {% block scripts %}
 <script>
+  // Global Tool Modal Helpers
+  window.closeToolModal = function(event) {
+    if (event && event.target && !event.target.classList.contains('modal-backdrop') && !event.target.closest('.icon-button') && !event.target.closest('[data-modal-close]')) {
+      return;
+    }
+    const container = document.getElementById('modal-container');
+    if (container) container.innerHTML = '';
+  };
+
+  // Table Search Filter
+  window.filterToolTable = function() {
+    const query = (document.getElementById('tool-search-input').value || '').toLowerCase().trim();
+    const rows = document.querySelectorAll('#tools-data-table tbody tr.clickable-tool-row');
+    rows.forEach(row => {
+      const name = (row.getAttribute('data-tool-name') || '').toLowerCase();
+      const cat = (row.getAttribute('data-category') || '').toLowerCase();
+      const text = row.innerText.toLowerCase();
+      if (!query || name.includes(query) || cat.includes(query) || text.includes(query)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  };
+
+  // Setup JSON Viewer Controls inside Modal on HTMX swap
+  document.addEventListener('htmx:afterSwap', function(event) {
+    if (event.detail.target.id === 'modal-container') {
+      setupModalJsonToolbars();
+    }
+  });
+
+  function setupModalJsonToolbars() {
+    const modal = document.getElementById('modal-container');
+    if (!modal) return;
+
+    modal.querySelectorAll('[data-wrap-json]').forEach(btn => {
+      btn.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const box = this.closest('.json-shell-box');
+        const pre = box ? box.querySelector('.json-viewer') : null;
+        if (pre) {
+          pre.classList.toggle('is-nowrap');
+          this.classList.toggle('is-active', pre.classList.contains('is-nowrap'));
+          this.textContent = pre.classList.contains('is-nowrap') ? 'Unwrap' : 'Wrap';
+        }
+      };
+    });
+
+    modal.querySelectorAll('[data-expand-json]').forEach(btn => {
+      btn.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const box = this.closest('.json-shell-box');
+        const pre = box ? box.querySelector('.json-viewer') : null;
+        if (pre) {
+          pre.classList.toggle('is-expanded');
+          this.classList.toggle('is-active', pre.classList.contains('is-expanded'));
+          this.textContent = pre.classList.contains('is-expanded') ? 'Collapse' : 'Expand';
+        }
+      };
+    });
+
+    modal.querySelectorAll('[data-copy-json]').forEach(btn => {
+      btn.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const box = this.closest('.json-shell-box');
+        const code = box ? box.querySelector('code') : null;
+        if (code) {
+          navigator.clipboard.writeText(code.innerText).then(() => {
+            const originalText = this.textContent;
+            this.textContent = 'Copied!';
+            this.classList.add('is-copied');
+            setTimeout(() => {
+              this.textContent = originalText;
+              this.classList.remove('is-copied');
+            }, 2000);
+          });
+        }
+      };
+    });
+  }
+
+  // ECharts Rendering
   (() => {
     const rows = {{ chart_json|safe }};
-    const chart = echarts.init(document.getElementById('tool-chart'));
+    const chartElem = document.getElementById('tool-chart');
+    if (!chartElem) return;
+    const chart = echarts.init(chartElem);
     const draw = () => {
       const s = getComputedStyle(document.documentElement);
       const muted = s.getPropertyValue('--muted').trim();
       const line = s.getPropertyValue('--line').trim();
+      const surface = s.getPropertyValue('--surface').trim();
+      const text = s.getPropertyValue('--text').trim();
+
+      const toolNames = rows.map(x => x.name).reverse();
+      const counts = rows.map(x => x.count).reverse();
+      const p95s = rows.map(x => x.p95).reverse();
+
       chart.setOption({
         backgroundColor: 'transparent',
-        tooltip: {trigger: 'axis', axisPointer: {type: 'shadow'}, backgroundColor: s.getPropertyValue('--surface').trim(), borderColor: line, textStyle: {color: s.getPropertyValue('--text').trim(), fontSize: 12}},
-        grid: {left: 160, right: 55, top: 25, bottom: 35},
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {type: 'shadow'},
+          backgroundColor: surface,
+          borderColor: line,
+          textStyle: {color: text, fontSize: 12}
+        },
+        grid: {left: 170, right: 60, top: 30, bottom: 35},
         legend: {textStyle: {color: muted, fontSize: 11}},
-        xAxis: [{type: 'value', name: 'calls', nameTextStyle: {color: muted}, axisLabel: {color: muted, fontSize: 11}, axisLine: {show: false}, splitLine: {lineStyle: {color: line}}}, {type: 'value', name: 'p95 ms', nameTextStyle: {color: muted}, axisLabel: {color: muted, fontSize: 11}, splitLine: {show: false}}],
-        yAxis: {type: 'category', data: rows.map(x => x.name).reverse(), axisTick: {show: false}, axisLine: {lineStyle: {color: line}}, axisLabel: {color: muted, fontFamily: 'IBM Plex Mono', fontSize: 11}},
-        series: [{name: 'Calls', type: 'bar', data: rows.map(x => x.count).reverse(), barMaxWidth: 18, itemStyle: {color: '#ff6100', borderRadius: [0, 5, 5, 0]}}, {name: 'p95 ms', type: 'line', xAxisIndex: 1, data: rows.map(x => x.p95).reverse(), symbolSize: 6, lineStyle: {width: 2, color: '#3f6ad8'}, itemStyle: {color: '#3f6ad8'}}]
+        xAxis: [
+          {
+            type: 'value',
+            name: 'Çağrı',
+            nameTextStyle: {color: muted},
+            axisLabel: {color: muted, fontSize: 11},
+            axisLine: {show: false},
+            splitLine: {lineStyle: {color: line}}
+          },
+          {
+            type: 'value',
+            name: 'p95 ms',
+            nameTextStyle: {color: muted},
+            axisLabel: {color: muted, fontSize: 11},
+            splitLine: {show: false}
+          }
+        ],
+        yAxis: {
+          type: 'category',
+          data: toolNames,
+          axisTick: {show: false},
+          axisLine: {lineStyle: {color: line}},
+          axisLabel: {color: muted, fontFamily: 'IBM Plex Mono', fontSize: 11}
+        },
+        series: [
+          {
+            name: 'Çağrı Sayısı',
+            type: 'bar',
+            data: counts,
+            barMaxWidth: 18,
+            itemStyle: {color: '#ff6100', borderRadius: [0, 5, 5, 0]}
+          },
+          {
+            name: 'p95 Gecikme (ms)',
+            type: 'line',
+            xAxisIndex: 1,
+            data: p95s,
+            symbolSize: 6,
+            lineStyle: {width: 2, color: '#3f6ad8'},
+            itemStyle: {color: '#3f6ad8'}
+          }
+        ]
       }, true);
     };
-    draw(); addEventListener('resize', () => chart.resize()); addEventListener('pulse-theme-change', draw);
+
+    // Click on bar opens tool modal
+    chart.on('click', function(params) {
+      if (params.name) {
+        htmx.ajax('GET', `/tools/${params.name}/modal/`, '#modal-container');
+      }
+    });
+
+    draw();
+    addEventListener('resize', () => chart.resize());
+    addEventListener('pulse-theme-change', draw);
   })();
 </script>
 {% endblock %}

@@ -7,7 +7,12 @@
     <h1>See the entire MCP flow at a glance.</h1>
     <p>Sessions, tools, Jotform API calls, cost, and data quality on one trace.</p>
   </div>
-  <a class="button" href="{% url 'session-list' %}">Explore sessions <span>→</span></a>
+  <div class="page-head-actions">
+    {% if active_time_label %}
+    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+    {% endif %}
+    <a class="button" href="{% url 'session-list' %}">Explore sessions <span>→</span></a>
+  </div>
 </div>
 
 <div class="metric-grid">

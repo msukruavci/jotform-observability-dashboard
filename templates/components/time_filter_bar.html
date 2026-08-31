@@ -1,0 +1,17 @@
+{% if time_presets %}
+<div class="time-filter-strip" role="group" aria-label="Zaman Filtresi">
+  <span class="time-filter-icon" title="Zaman aralığı seçin">⏱️</span>
+  <div class="time-pill-group">
+    {% for preset in time_presets %}
+    <a
+      href="{{ preset.url }}"
+      class="time-pill {% if preset.is_active %}active{% endif %}"
+      data-time-range="{{ preset.key }}"
+      title="{{ preset.label }}"
+    >
+      {{ preset.short_label }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

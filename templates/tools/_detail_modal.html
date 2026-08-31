@@ -1,0 +1,226 @@
+{% if tool_data and tool_data.total_calls > 0 %}
+<div class="modal-backdrop" id="tool-modal-backdrop" onclick="closeToolModal(event)">
+  <div class="modal-card tool-modal-card" onclick="event.stopPropagation()">
+    <!-- Modal Header -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-tags">
+          <span class="badge" style="background: {{ tool_data.meta.badge_color }}22; color: {{ tool_data.meta.badge_color }}; border-color: {{ tool_data.meta.badge_color }}44;">
+            {{ tool_data.meta.icon }} {{ tool_data.meta.category }}
+          </span>
+          <span class="badge badge-subtle">Tool: <code class="mono">{{ tool_data.meta.name }}</code></span>
+          <span class="badge {% if tool_data.error_rate == 0 %}badge-success{% elif tool_data.error_rate < 5 %}badge-warning{% else %}badge-danger{% endif %}">
+            ⚡ {{ tool_data.total_calls }} calls ({{ tool_data.success_rate }}% ok)
+          </span>
+        </div>
+        <h2>{{ tool_data.meta.icon }} {{ tool_data.meta.title }}</h2>
+      </div>
+      <button class="icon-button" type="button" onclick="closeToolModal()" aria-label="Close modal">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Tool Description -->
+      {% if tool_data.meta.description %}
+      <div class="tool-desc-card">
+        <p class="modal-desc">{{ tool_data.meta.description }}</p>
+      </div>
+      {% endif %}
+
+      <!-- Top KPI Stats (4-Grid) -->
+      <div class="stats-pills tool-kpi-grid">
+        <div class="pill">
+          <span class="pill-label">Toplam Çağrı &amp; Başarı</span>
+          <strong class="mono">{{ tool_data.total_calls }}</strong>
+          <small class="pill-sub">
+            <span class="text-success">{{ tool_data.success_count }} başarılı</span> · 
+            <span class="{% if tool_data.error_count > 0 %}text-danger{% else %}text-muted{% endif %}">{{ tool_data.error_count }} hata ({{ tool_data.error_rate }}%)</span>
+          </small>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Gecikme (p50 / p95)</span>
+          <strong class="mono">{{ tool_data.latency.p50_ms }} ms</strong>
+          <small class="pill-sub">p95: {{ tool_data.latency.p95_ms }} ms · min/max: {{ tool_data.latency.min_ms }}-{{ tool_data.latency.max_ms }} ms</small>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Veri Transferi</span>
+          <strong class="mono">{{ tool_data.data_transferred.avg_bytes_formatted }}</strong>
+          <small class="pill-sub">Toplam: {{ tool_data.data_transferred.total_bytes_formatted }} payload</small>
+        </div>
+        <div class="pill">
+          <span class="pill-label">Jotform Cloud HTTP</span>
+          <strong class="mono">{{ tool_data.http_stats.avg_http_count }} /çağrı</strong>
+          <small class="pill-sub">Toplam {{ tool_data.http_stats.total_http_count }} HTTP API isteği</small>
+        </div>
+      </div>
+
+      <!-- Analytics Sub-Panels (2 Columns) -->
+      <div class="tool-analytics-grid">
+        <!-- Latency Distribution Histogram -->
+        <div class="tool-subpanel">
+          <div class="subpanel-head">
+            <h3>⏱️ Gecikme Dağılımı (Latency Buckets)</h3>
+            <span class="muted font-11">p90: {{ tool_data.latency.p90_ms }} ms · p99: {{ tool_data.latency.p99_ms }} ms</span>
+          </div>
+          <div class="histogram-bars">
+            {% for b in tool_data.latency_buckets %}
+            <div class="hist-row">
+              <div class="hist-label">
+                <strong>{{ b.label }}</strong>
+                <small>{{ b.sub }}</small>
+              </div>
+              <div class="hist-bar-wrapper">
+                <div class="hist-bar-fill" style="width: {{ b.pct }}%; background-color: {{ b.color }};"></div>
+              </div>
+              <div class="hist-val mono">{{ b.count }} <small>({{ b.pct }}%)</small></div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Platform & Model Breakdown with Base-Rate Normalization -->
+        <div class="tool-subpanel">
+          <div class="subpanel-head">
+            <h3>🤖 Platform &amp; Model Kullanım Oranları</h3>
+            <span class="muted font-11">Normalize edilmiş oturum penetrasyonu &amp; çağrı payı</span>
+          </div>
+          <div class="platform-stats-list">
+            {% for p in tool_data.platforms_breakdown %}
+            <div class="platform-stat-card">
+              <div class="platform-stat-row">
+                <div class="platform-name">
+                  <span class="platform-dot platform-{{ p.platform }}"></span>
+                  <strong>{{ p.display }}</strong>
+                </div>
+                <div class="platform-bar-wrapper">
+                  <div class="platform-bar-fill platform-{{ p.platform }}" style="width: {{ p.session_penetration_pct }}%;"></div>
+                </div>
+                <span class="mono platform-num" title="Oturum penetrasyon oranı">%{{ p.session_penetration_pct }}</span>
+              </div>
+              <div class="platform-stat-sub">
+                <span>{{ p.sessions_used }}/{{ p.total_platform_sessions }} oturumda kullanıldı</span> · 
+                <span>{{ p.count }} çağrı (Platform içi payı: %{{ p.share_of_platform_calls_pct }})</span> · 
+                <span class="mono font-10">{{ p.avg_calls_per_session }} çağrı/oturum</span>
+              </div>
+            </div>
+            {% empty %}
+            <p class="muted font-12">Henüz platform dağılım verisi yok.</p>
+            {% endfor %}
+          </div>
+
+          {% if tool_data.models_breakdown %}
+          <div class="models-mini-list">
+            <span class="muted font-10 uppercase tracking">En Çok Kullanan Modeller:</span>
+            <div class="model-tags-wrap">
+              {% for m in tool_data.models_breakdown %}
+              <span class="model-chip" title="{{ m.model }}">{{ m.model|truncatechars:28 }}: <strong>{{ m.count }}</strong></span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Sequence Flow & Transitions -->
+      <div class="tool-subpanel">
+        <div class="subpanel-head">
+          <h3>🔄 İş Akışı Sıralama &amp; Bağlam Analizi (Sequence Transitions)</h3>
+          <span class="muted font-11">Bu tooldan önce ve sonra çağrılan tool'lar</span>
+        </div>
+        <div class="sequence-grid">
+          <!-- Preceding -->
+          <div class="sequence-col">
+            <span class="sequence-title">⬅️ Önce Çağrılan Tool'lar (Preceding)</span>
+            <div class="sequence-list">
+              {% for item in tool_data.sequence_flow.preceding %}
+              <div class="sequence-item">
+                <span class="sequence-icon">{{ item.meta.icon }}</span>
+                <span class="sequence-name mono">{{ item.name }}</span>
+                <span class="sequence-count badge badge-subtle">{{ item.count }}x</span>
+              </div>
+              {% empty %}
+              <p class="muted font-11">Önceki adım verisi yok (Genellikle ilk adım).</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Subsequent -->
+          <div class="sequence-col">
+            <span class="sequence-title">➡️ Sonra Çağrılan Tool'lar (Subsequent)</span>
+            <div class="sequence-list">
+              {% for item in tool_data.sequence_flow.subsequent %}
+              <div class="sequence-item">
+                <span class="sequence-icon">{{ item.meta.icon }}</span>
+                <span class="sequence-name mono">{{ item.name }}</span>
+                <span class="sequence-count badge badge-subtle">{{ item.count }}x</span>
+              </div>
+              {% empty %}
+              <p class="muted font-11">Sonraki adım verisi yok (Genellikle son adım).</p>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Child HTTP Endpoints Called (if any) -->
+      {% if tool_data.http_stats.top_endpoints %}
+      <div class="tool-subpanel">
+        <div class="subpanel-head">
+          <h3>🌐 Çağrılan Jotform API Uç Noktaları (Cloud API Traces)</h3>
+          <span class="muted font-11">Toplam {{ tool_data.http_stats.total_http_count }} HTTP isteği</span>
+        </div>
+        <div class="endpoint-chips">
+          {% for ep in tool_data.http_stats.top_endpoints %}
+          <div class="endpoint-chip">
+            <code class="mono">{{ ep.endpoint }}</code>
+            <span class="badge badge-subtle">{{ ep.count }} istek ({{ ep.pct }}%)</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Top Errors Breakdown (if any) -->
+      {% if tool_data.top_errors %}
+      <div class="tool-subpanel error-subpanel">
+        <div class="subpanel-head">
+          <h3>⚠️ Karşılaşılan Hatalar &amp; Sebepleri</h3>
+          <span class="badge badge-danger">{{ tool_data.error_count }} hata kaydı</span>
+        </div>
+        <div class="error-list">
+          {% for err in tool_data.top_errors %}
+          <div class="error-item">
+            <span class="badge badge-danger">{{ err.count }}x</span>
+            <code class="error-msg">{{ err.message }}</code>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ================= STEP-BY-STEP INVOCATIONS (ADIM ADIM TÜM ÇAĞRILMALAR) ================= -->
+      <div class="invocations-section">
+        <div class="invocations-head">
+          <div>
+            <h3>📜 Adım Adım Tüm Çağrılmalar (Call History &amp; Filters)</h3>
+            <p class="muted font-12">Bu toolun tüm oturumlardaki geçmiş çağrıları, girdi/çıktı JSON'ları, HTTP alt izleri ve çok boyutlu filtreleme.</p>
+          </div>
+        </div>
+
+        {% include "tools/_invocations_list.html" %}
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="modal-backdrop" id="tool-modal-backdrop" onclick="closeToolModal()">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>Tool Bulunamadı</h2>
+      <button class="icon-button" type="button" onclick="closeToolModal()">&times;</button>
+    </div>
+    <div class="modal-body"><p class="muted">Belirtilen tool adına ait kayıt bulunamadı.</p></div>
+  </div>
+</div>
+{% endif %}

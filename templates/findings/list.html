@@ -1,8 +1,17 @@
 {% extends "layouts/base.html" %}
 {% block title %}Findings{% endblock %}
 {% block content %}
-<div class="page-head compact"><div><p class="eyebrow">Rule engine</p><h1>Findings</h1><p>Every improvement opportunity includes supporting evidence, confidence, and estimated time waste.</p></div></div>
-<form class="filter-bar short" method="get"><select name="status" aria-label="Filter by status"><option value="">All statuses</option><option {% if request.GET.status == 'open' %}selected{% endif %}>open</option><option {% if request.GET.status == 'accepted' %}selected{% endif %}>accepted</option><option {% if request.GET.status == 'false_positive' %}selected{% endif %}>false_positive</option><option {% if request.GET.status == 'snoozed' %}selected{% endif %}>snoozed</option></select><select name="severity" aria-label="Filter by severity"><option value="">All severities</option><option {% if request.GET.severity == 'high' %}selected{% endif %}>high</option><option {% if request.GET.severity == 'medium' %}selected{% endif %}>medium</option><option {% if request.GET.severity == 'low' %}selected{% endif %}>low</option></select><select name="rule" aria-label="Filter by rule"><option value="">All rules</option>{% for rule in rule_codes %}<option {% if request.GET.rule == rule %}selected{% endif %}>{{ rule }}</option>{% endfor %}</select><button type="submit">Apply filters</button></form>
+<div class="page-head compact">
+  <div><p class="eyebrow">Rule engine</p><h1>Findings</h1><p>Every improvement opportunity includes supporting evidence, confidence, and estimated time waste.</p></div>
+  {% if active_time_label %}
+  <div class="page-head-actions">
+    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+  </div>
+  {% endif %}
+</div>
+<form class="filter-bar short" method="get">
+  {% if request.GET.range %}<input type="hidden" name="range" value="{{ request.GET.range }}">{% endif %}
+  <select name="status" aria-label="Filter by status"><option value="">All statuses</option><option {% if request.GET.status == 'open' %}selected{% endif %}>open</option><option {% if request.GET.status == 'accepted' %}selected{% endif %}>accepted</option><option {% if request.GET.status == 'false_positive' %}selected{% endif %}>false_positive</option><option {% if request.GET.status == 'snoozed' %}selected{% endif %}>snoozed</option></select><select name="severity" aria-label="Filter by severity"><option value="">All severities</option><option {% if request.GET.severity == 'high' %}selected{% endif %}>high</option><option {% if request.GET.severity == 'medium' %}selected{% endif %}>medium</option><option {% if request.GET.severity == 'low' %}selected{% endif %}>low</option></select><select name="rule" aria-label="Filter by rule"><option value="">All rules</option>{% for rule in rule_codes %}<option {% if request.GET.rule == rule %}selected{% endif %}>{{ rule }}</option>{% endfor %}</select><button type="submit">Apply filters</button></form>
 <div class="finding-list">{% for finding in page_obj %}<article class="finding-list-card"><span class="severity severity-{{ finding.severity }}"></span><div><div class="finding-meta"><span>{{ finding.rule_code }}</span><span>{{ finding.confidence }} confidence</span><span>{{ finding.status }}</span></div><h2><a href="{% url 'session-detail' finding.session_id %}">{{ finding.display_title }}</a></h2><p>{{ finding.display_description }}</p><div class="recommendation"><strong>Recommendation</strong>{{ finding.display_recommendation }}</div></div><aside><strong>{{ finding.wasted_ms|floatformat:0 }} ms</strong><small>estimated waste</small></aside></article>{% empty %}<div class="empty panel">No findings match these filters.</div>{% endfor %}</div>
 {% include "components/pagination.html" %}
 {% endblock %}

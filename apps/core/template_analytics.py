@@ -295,9 +295,13 @@ def extract_templates_from_result(result_data: Any, dataset_map: dict[str, dict[
             except Exception:
                 pass
 
-    # 4. Fallback: regex for all template IDs in raw result
+    # 4. Fallback: regex for template IDs and their corresponding similarity scores
     raw_str = str(result_data)
     import re
+    
+    # Try to find (id, score) pairs if present
+    pairs = re.findall(r'id[\\\"\'\s:]+(\d{10,20}).*?score[\\\"\'\s:]+([0-9.]+)', raw_str)
+    score_by_id = {tid: round(float(sc), 4) for tid, sc in pairs}
     found_ids = list(dict.fromkeys(re.findall(r'id[\\\"\'\s:]+(\d{10,20})', raw_str)))
 
     results = []
@@ -310,7 +314,7 @@ def extract_templates_from_result(result_data: Any, dataset_map: dict[str, dict[
             "tags": meta.get("tags", ""),
             "clone_count": int(meta.get("clone_count") or 0),
             "steps_summary": meta.get("steps_summary", []),
-            "score": 0.0,
+            "score": score_by_id.get(tid, 0.0),
             "slug": meta.get("slug", ""),
             "category": meta.get("category") or "General Management",
             "jotform_url": f"https://www.jotform.com/workflow-templates/{meta.get('slug') or tid}",

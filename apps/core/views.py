@@ -33,6 +33,9 @@ from .template_analytics import (
     get_template_charts_data,
     get_templates_overview_metrics,
 )
+from .platform_filters import parse_platform_filter
+from .time_filters import parse_time_filter
+from .tool_analytics import get_tool_detail_data, get_tools_overview_metrics
 
 
 
@@ -41,11 +44,29 @@ class OverviewView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(overview_metrics())
-        context["platforms"] = platform_breakdown_metrics()
-        context["timeseries_json"] = json.dumps(session_timeseries())
-        context["slow_sessions"] = Session.objects.exclude(duration_ms=None).order_by("-duration_ms")[:6]
-        context["top_findings"] = Finding.objects.filter(status="open").select_related("session").order_by("-severity", "-created_at")[:6]
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
+        context.update(overview_metrics(since=since, platform_q=platform_q))
+        context["platforms"] = platform_breakdown_metrics(since=since, platform_q=platform_q)
+        context["timeseries_json"] = json.dumps(session_timeseries(since=since, platform_q=platform_q))
+        
+        slow_qs = Session.objects.exclude(duration_ms=None)
+        if since is not None:
+            slow_qs = slow_qs.filter(started_at__gte=since)
+        if platform_q:
+            slow_qs = slow_qs.filter(platform_q)
+        context["slow_sessions"] = slow_qs.order_by("-duration_ms")[:6]
+        
+        findings_qs = Finding.objects.filter(status="open")
+        if since is not None:
+            findings_qs = findings_qs.filter(created_at__gte=since)
+        if platform_q:
+            findings_qs = findings_qs.filter(session__in=Session.objects.filter(platform_q))
+        context["top_findings"] = findings_qs.select_related("session").order_by("-severity", "-created_at")[:6]
         context["active_nav"] = "overview"
         return context
 
@@ -60,26 +81,26 @@ class SessionListView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        
+        context.update(time_ctx)
+        context.update(platform_ctx)
+
         base_query = Session.objects.annotate(
             turn_count=Count("turns", distinct=True),
             span_count=Count("spans", distinct=True),
             tool_count=Count("spans", filter=Q(spans__kind="tool"), distinct=True),
             finding_count=Count("findings", distinct=True),
         ).filter(Q(turn_count__gt=0) | Q(span_count__gt=0))
+        if since is not None:
+            base_query = base_query.filter(started_at__gte=since)
+        
         query = base_query
+        if platform_q:
+            query = query.filter(platform_q)
+            
         params = self.request.GET
-        platform = params.get("platform", "").strip().lower()
-        if platform:
-            if platform == "claude":
-                query = query.filter(Q(provider__icontains="anthropic") | Q(provider__icontains="claude") | Q(model__icontains="claude"))
-            elif platform == "gemini":
-                query = query.filter(Q(provider__icontains="gemini") | Q(provider__icontains="google") | Q(model__icontains="gemini"))
-            elif platform == "gpt":
-                query = query.filter(Q(provider__icontains="openai") | Q(provider__icontains="gpt") | Q(provider__icontains="chatgpt") | Q(model__icontains="gpt") | Q(model__icontains="o1") | Q(model__icontains="o3"))
-            elif platform == "test":
-                query = query.filter(Q(provider__icontains="test") | Q(provider__icontains="ci") | Q(model__icontains="test") | Q(model__icontains="pytest"))
-            elif platform == "mcp":
-                query = query.filter((Q(provider="mcp") | Q(provider="")) & ~Q(provider__icontains="test") & ~Q(model__icontains="test") & ~Q(model__icontains="claude") & ~Q(model__icontains="gemini") & ~Q(model__icontains="gpt"))
         if params.get("q"):
             query = query.filter(Q(external_session_id__icontains=params["q"]) | Q(model__icontains=params["q"]) | Q(turns__question__icontains=params["q"])).distinct()
         for field in ("status", "provider", "model", "correlation_confidence"):
@@ -104,15 +125,14 @@ class SessionListView(TemplateView):
             item.created_resources = session_created_resources(item)
             item.timing_breakdown = session_timing_breakdown(item, spans_by_session.get(item.id, []))
         context["page_obj"] = page_obj
-        context["platform_counts"] = {
-            "all": base_query.count(),
-            "claude": base_query.filter(Q(provider__icontains="anthropic") | Q(provider__icontains="claude") | Q(model__icontains="claude")).count(),
-            "gemini": base_query.filter(Q(provider__icontains="gemini") | Q(provider__icontains="google") | Q(model__icontains="gemini")).count(),
-            "gpt": base_query.filter(Q(provider__icontains="openai") | Q(provider__icontains="gpt") | Q(provider__icontains="chatgpt") | Q(model__icontains="gpt") | Q(model__icontains="o1") | Q(model__icontains="o3")).count(),
-            "mcp": base_query.filter((Q(provider="mcp") | Q(provider="")) & ~Q(provider__icontains="test") & ~Q(model__icontains="test") & ~Q(model__icontains="claude") & ~Q(model__icontains="gemini") & ~Q(model__icontains="gpt")).count(),
-            "test": base_query.filter(Q(provider__icontains="test") | Q(provider__icontains="ci") | Q(model__icontains="test") | Q(model__icontains="pytest")).count(),
-        }
-        context["active_platform"] = platform or "all"
+        
+        from apps.core.platform_filters import PLATFORM_PRESETS
+        platform_counts = {"all": base_query.count()}
+        for p in PLATFORM_PRESETS:
+            if not p.get("is_all"):
+                platform_counts[p["key"]] = base_query.filter(p["filter"]).count()
+                
+        context["platform_counts"] = platform_counts
         context["providers"] = Session.objects.exclude(provider="").values_list("provider", flat=True).distinct().order_by("provider")
         context["models"] = Session.objects.exclude(model="").values_list("model", flat=True).distinct().order_by("model")
         context["tools"] = ToolCall.objects.values_list("tool_name", flat=True).distinct().order_by("tool_name")
@@ -200,10 +220,82 @@ class ToolIntelligenceView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        metrics = tool_metrics()
-        context["tool_metrics"] = metrics
-        context["chart_json"] = json.dumps(metrics)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+
+        platform_filter = active_platform if active_platform != "all" else ""
+        category_filter = self.request.GET.get("category", "")
+        status_filter = self.request.GET.get("status", "")
+        search_q = self.request.GET.get("q", "")
+
+        overview = get_tools_overview_metrics(
+            since=since,
+            platform_filter=platform_filter,
+            category_filter=category_filter,
+            status_filter=status_filter,
+            search_q=search_q,
+        )
+        context.update(overview)
+        context["search_q"] = search_q
+        context["active_category"] = category_filter or "all"
+        context["active_status"] = status_filter or "all"
+
+        selected_tool = self.kwargs.get("tool_name") or self.request.GET.get("tool")
+        if selected_tool:
+            page = self.request.GET.get("page", 1)
+            tool_data = get_tool_detail_data(
+                selected_tool,
+                page=page,
+                search_q=search_q,
+                status_filter=status_filter,
+                platform_filter=platform_filter,
+                since=since,
+            )
+            context["selected_tool"] = selected_tool
+            context["selected_tool_data"] = tool_data
+
         context["active_nav"] = "tools"
+        return context
+
+
+class ToolDetailModalView(TemplateView):
+    template_name = "tools/_detail_modal.html"
+
+    def get_template_names(self):
+        target = self.request.GET.get("target")
+        if self.request.headers.get("HX-Request") == "true" and target == "invocations_list":
+            return ["tools/_invocations_list.html"]
+        return super().get_template_names()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+
+        tool_name = self.kwargs.get("tool_name", "")
+        page = self.request.GET.get("page", 1)
+        search_q = self.request.GET.get("q", "")
+        status_filter = self.request.GET.get("status", "")
+        platform_filter = active_platform if active_platform != "all" else ""
+        speed_filter = self.request.GET.get("speed", "")
+        http_filter = self.request.GET.get("http", "")
+
+        tool_data = get_tool_detail_data(
+            tool_name,
+            page=page,
+            search_q=search_q,
+            status_filter=status_filter,
+            platform_filter=platform_filter,
+            speed_filter=speed_filter,
+            http_filter=http_filter,
+            since=since,
+        )
+        context["tool_data"] = tool_data
+        context["tool_name"] = tool_name
         return context
 
 
@@ -212,6 +304,11 @@ class ExperimentABCDView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
         rows = scenario_rows()
         chart_rows = [
             {
@@ -264,7 +361,17 @@ class FindingsView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
         findings = Finding.objects.select_related("session", "span", "turn")
+        if since is not None:
+            findings = findings.filter(created_at__gte=since)
+        if platform_q:
+            findings = findings.filter(session__in=Session.objects.filter(platform_q))
+            
         if self.request.GET.get("status"):
             findings = findings.filter(status=self.request.GET["status"])
         if self.request.GET.get("severity"):
@@ -282,10 +389,15 @@ class CostView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        rows = cost_by_model()
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
+        rows = cost_by_model(since=since, platform_q=platform_q)
         context["rows"] = rows
         context["chart_json"] = json.dumps(rows)
-        context["metrics"] = overview_metrics()
+        context["metrics"] = overview_metrics(since=since, platform_q=platform_q)
         context["active_nav"] = "costs"
         return context
 
@@ -295,10 +407,25 @@ class DataHealthView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["sources"] = IngestionSource.objects.annotate(quarantine_count=Count("quarantined_events")).order_by("-last_seen_at")
-        context["quarantined"] = QuarantinedEvent.objects.select_related("source").order_by("-created_at")[:50]
-        context["event_count"] = RawEvent.objects.count()
-        context["high_correlation"] = RawEvent.objects.filter(correlation_confidence="high").count()
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
+        sources_qs = IngestionSource.objects.annotate(quarantine_count=Count("quarantined_events")).order_by("-last_seen_at")
+        quarantine_qs = QuarantinedEvent.objects.select_related("source").order_by("-created_at")
+        events_qs = RawEvent.objects.all()
+        if since is not None:
+            quarantine_qs = quarantine_qs.filter(created_at__gte=since)
+            events_qs = events_qs.filter(occurred_at__gte=since)
+            
+        # DataHealth is a bit tricky with platforms, we'll filter events if they are tied to sessions
+        # But wait, RawEvent's `payload__session_id` can be used. For simplicity, just provide the context here.
+        
+        context["sources"] = sources_qs
+        context["quarantined"] = quarantine_qs[:50]
+        context["event_count"] = events_qs.count()
+        context["high_correlation"] = events_qs.filter(correlation_confidence="high").count()
         context["active_nav"] = "data-health"
         return context
 
@@ -319,9 +446,16 @@ class TemplateIntelligenceView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        since, active_range, time_ctx = parse_time_filter(self.request)
+        platform_q, active_platform, platform_ctx = parse_platform_filter(self.request)
+        context.update(time_ctx)
+        context.update(platform_ctx)
+        
         active_tab = self.request.GET.get("tab", "invocations")
         if active_tab not in ("invocations", "analysis", "catalog"):
             active_tab = "invocations"
+        context["active_tab"] = active_tab
+        context["active_nav"] = "templates"
 
         # 1. Invocations filter & pagination
         inv_q = self.request.GET.get("inv_q", "")

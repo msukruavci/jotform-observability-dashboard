@@ -1,0 +1,50 @@
+<div class="filter-dropdown ml-3" style="position: relative;">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleDropdown('platformDropdown')" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-color: rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+        <span>{{ active_platform_icon }}</span>
+        <span>{{ active_platform_label }}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 2px;">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    </button>
+    <div id="platformDropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 110%; background: #1e1e2d; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.5rem; min-width: 200px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+        {% for p in platform_presets %}
+        <a href="{{ p.url }}" class="dropdown-item {% if p.is_active %}active{% endif %}" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem; color: #fff; text-decoration: none; border-radius: 4px; margin-bottom: 2px; transition: background 0.2s;">
+            <span style="width: 24px; text-align: center;">{{ p.icon }}</span>
+            <span style="flex: 1; font-weight: {% if p.is_active %}600{% else %}400{% endif %};">{{ p.label }}</span>
+            {% if p.is_active %}
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #10b981;">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.dropdown-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+.dropdown-item.active {
+    background: rgba(255,255,255,0.1);
+}
+</style>
+
+<script>
+function toggleDropdown(id) {
+    const el = document.getElementById(id);
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        // Close when clicking outside
+        const closeHandler = function(e) {
+            if (!el.parentElement.contains(e.target)) {
+                el.style.display = 'none';
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    } else {
+        el.style.display = 'none';
+    }
+}
+</script>

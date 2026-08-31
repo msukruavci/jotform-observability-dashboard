@@ -328,7 +328,28 @@
 <details class="panel developer-panel">
   <summary><span class="code-icon">{ }</span><span><strong>Raw telemetry</strong><small>Source JSON events for debugging</small></span><span class="muted">{{ raw_events|length }} events</span><span class="chevron">⌄</span></summary>
   <div class="developer-events">
-    {% for item in raw_events %}<details class="raw-event"><summary><span class="mono">{{ item.event.occurred_at|date:"H:i:s.u" }}</span><strong>{{ item.event.event_type }}</strong><span class="confidence confidence-{{ item.event.correlation_confidence }}">{{ item.event.correlation_confidence }}</span></summary><pre class="json-viewer">{{ item.pretty_payload }}</pre></details>{% empty %}<div class="empty">No raw events match this session ID.</div>{% endfor %}
+    {% for item in raw_events %}
+      <details class="raw-event">
+        <summary>
+          <span class="mono">{{ item.event.occurred_at|date:"H:i:s.u" }}</span>
+          <strong>{{ item.event.event_type }}</strong>
+          <span class="confidence confidence-{{ item.event.correlation_confidence }}">{{ item.event.correlation_confidence }}</span>
+        </summary>
+        <div class="json-code-shell" style="margin-top: 8px;">
+          <div class="json-toolbar">
+            <span class="json-tag">{{ item.event.event_type }}</span>
+            <div class="json-actions">
+              <button class="json-btn" type="button" data-wrap-json title="Toggle line wrap">Wrap</button>
+              <button class="json-btn" type="button" data-expand-json title="Toggle height">Expand</button>
+              <button class="json-btn json-copy" type="button" data-copy-json title="Copy JSON">Copy</button>
+            </div>
+          </div>
+          <pre class="json-viewer">{{ item.pretty_payload }}</pre>
+        </div>
+      </details>
+    {% empty %}
+      <div class="empty">No raw events match this session ID.</div>
+    {% endfor %}
   </div>
 </details>
 {% endblock %}
@@ -354,6 +375,7 @@
 
     const escapeHtml = value => value.replace(/[&<>]/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[character]));
     const jsonPattern = /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    
     document.querySelectorAll('.json-viewer').forEach(viewer => {
       const raw = viewer.textContent;
       viewer.dataset.raw = raw;
@@ -362,12 +384,44 @@
         return `<span class="json-${type}">${token}</span>`;
       });
     });
+
+    // Copy JSON handler
     document.querySelectorAll('[data-copy-json]').forEach(button => button.addEventListener('click', async () => {
-      const viewer = button.closest('.json-code-shell')?.querySelector('.json-viewer');
+      const shell = button.closest('.json-code-shell');
+      const viewer = shell?.querySelector('.json-viewer');
       if (!viewer) return;
-      await navigator.clipboard.writeText(viewer.dataset.raw || viewer.textContent);
-      button.textContent = 'Copied';
-      setTimeout(() => { button.textContent = 'Copy'; }, 1400);
+      try {
+        await navigator.clipboard.writeText(viewer.dataset.raw || viewer.textContent);
+        const orig = button.textContent;
+        button.textContent = '✓ Copied';
+        button.classList.add('active');
+        setTimeout(() => {
+          button.textContent = orig;
+          button.classList.remove('active');
+        }, 1500);
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+    }));
+
+    // Toggle Wrap handler (default is wrap, click toggles to no-wrap)
+    document.querySelectorAll('[data-wrap-json]').forEach(button => button.addEventListener('click', () => {
+      const shell = button.closest('.json-code-shell');
+      const viewer = shell?.querySelector('.json-viewer');
+      if (!viewer) return;
+      const isNowrap = viewer.classList.toggle('is-nowrap');
+      button.classList.toggle('active', isNowrap);
+      button.textContent = isNowrap ? 'Unwrapped' : 'Wrap';
+    }));
+
+    // Toggle Expand height handler
+    document.querySelectorAll('[data-expand-json]').forEach(button => button.addEventListener('click', () => {
+      const shell = button.closest('.json-code-shell');
+      const viewer = shell?.querySelector('.json-viewer');
+      if (!viewer) return;
+      const isExpanded = viewer.classList.toggle('is-expanded');
+      button.classList.toggle('active', isExpanded);
+      button.textContent = isExpanded ? 'Collapse' : 'Expand';
     }));
   })();
 </script>
