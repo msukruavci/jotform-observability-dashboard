@@ -4,10 +4,10 @@
       <thead>
         <tr>
           <th style="width: 60px;">#</th>
-          <th style="width: 130px;">Kosinüs Skoru</th>
-          <th>Şablon A (Kaynak Blueprint)</th>
-          <th>Şablon B (Karşılaştırılan Blueprint)</th>
-          <th class="num" style="width: 140px;">Hızlı İnceleme</th>
+          <th style="width: 130px;">Cosine Score</th>
+          <th>Template A (Source Blueprint)</th>
+          <th>Template B (Compared Blueprint)</th>
+          <th class="num" style="width: 140px;">Quick Inspect</th>
         </tr>
       </thead>
       <tbody>
@@ -45,7 +45,7 @@
                 hx-get="{% url 'template-detail-modal' pair.template_a.id %}"
                 hx-target="#modal-container"
                 hx-swap="innerHTML"
-                title="Şablon A'yı İncele"
+                title="Inspect Template A"
               >
                 A ↗
               </button>
@@ -55,7 +55,7 @@
                 hx-get="{% url 'template-detail-modal' pair.template_b.id %}"
                 hx-target="#modal-container"
                 hx-swap="innerHTML"
-                title="Şablon B'yi İncele"
+                title="Inspect Template B"
               >
                 B ↗
               </button>
@@ -64,7 +64,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="empty">Bu aralıkta ([{{ analysis_data.selected_bucket }}]) herhangi bir şablon çifti bulunamadı.</td>
+          <td colspan="5" class="empty">No template pairs found in this bucket ([{{ analysis_data.selected_bucket }}]).</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -74,7 +74,7 @@
   <!-- Pagination for Analysis Bucket Pairs -->
   <div class="pagination-bar">
     <div class="pagination-info">
-      Bu aralıkta (<strong>{{ analysis_data.selected_bucket }}</strong>) toplam <strong>{{ analysis_data.pairs_page.total_items }}</strong> çift bulundu (Sayfa {{ analysis_data.pairs_page.page }} / {{ analysis_data.pairs_page.total_pages }})
+      Total of <strong>{{ analysis_data.pairs_page.total_items }}</strong> pairs found in this bucket (<strong>{{ analysis_data.selected_bucket }}</strong>) (Page {{ analysis_data.pairs_page.page }} / {{ analysis_data.pairs_page.total_pages }})
     </div>
     <div class="pagination-controls">
       {% if analysis_data.pairs_page.has_prev %}

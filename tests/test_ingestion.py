@@ -60,6 +60,18 @@ class IngestionTests(TestCase):
         self.assertEqual(external.span.attributes["status_code"], 200)
         self.assertEqual(external.span.attributes["response"], {})
 
+    def test_completed_mcp_result_with_embedded_error_is_ingested_as_error(self):
+        rows = [
+            {"timestamp": "2026-08-14T10:00:00Z", "session_id": "mcp-error", "event_type": "mcp.tool_call.started", "request_id": "tool-error", "tool": "build_workflow_bulk", "arguments": {}},
+            {"timestamp": "2026-08-14T10:00:00.1Z", "session_id": "mcp-error", "event_type": "mcp.tool_call.completed", "request_id": "tool-error", "tool": "build_workflow_bulk", "result": {"error": "Invalid outcome"}, "is_error": False},
+        ]
+        with TemporaryDirectory() as directory:
+            ingest_file(self.write_jsonl(directory, "mcp-error.jsonl", rows))
+
+        tool = ToolCall.objects.get()
+        self.assertTrue(tool.is_error)
+        self.assertEqual(tool.span.status, "error")
+
     def test_mcp_experiment_metadata_is_saved_on_session(self):
         rows = [
             {

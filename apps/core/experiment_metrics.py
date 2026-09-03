@@ -14,38 +14,38 @@ AB_SCENARIOS = [
     {
         "profile": "ab_a",
         "label": "A",
-        "name": "Templatesiz & Gap Kontrolsüz",
+        "name": "No Templates & No Gap Control",
         "template_enabled": False,
         "gap_enabled": False,
         "marker": "[ABCD-A]",
-        "prompt": "Yeni müşteri iade talepleri için workflow kurmak istiyorum.",
+        "prompt": "I want to set up a workflow for new customer return requests.",
     },
     {
         "profile": "ab_b",
         "label": "B",
-        "name": "Sadece Template Destekli",
+        "name": "Template Support Only",
         "template_enabled": True,
         "gap_enabled": False,
         "marker": "[ABCD-B]",
-        "prompt": "Yeni garanti servis talepleri için workflow kurmak istiyorum.",
+        "prompt": "I want to set up a workflow for new warranty service requests.",
     },
     {
         "profile": "ab_c",
         "label": "C",
-        "name": "Sadece Gap Kontrolü Destekli",
+        "name": "Gap Control Only",
         "template_enabled": False,
         "gap_enabled": True,
         "marker": "[ABCD-C]",
-        "prompt": "Yeni bayi başvuru talepleri için workflow kurmak istiyorum.",
+        "prompt": "I want to set up a workflow for new dealer application requests.",
     },
     {
         "profile": "ab_d",
         "label": "D",
-        "name": "Tam Sistem",
+        "name": "Full System",
         "template_enabled": True,
         "gap_enabled": True,
         "marker": "[ABCD-D]",
-        "prompt": "Yeni ekipman bakım talepleri için workflow kurmak istiyorum.",
+        "prompt": "I want to set up a workflow for new equipment maintenance requests.",
     },
 ]
 
@@ -321,7 +321,7 @@ def _repeated_tool_notes(calls: list[ToolCall]) -> list[str]:
     notes = []
     for (tool_name, _argument_hash), count in sorted(counts.items()):
         if count > 1:
-            notes.append(f"{tool_name} aynı argümanla {count} kez çağrıldı.")
+            notes.append(f"{tool_name} was called {count} times with the same argument.")
     return notes
 
 
@@ -399,16 +399,16 @@ def experiment_run_rows(limit: int = 25, latest_per_scenario: bool = True) -> li
         )
         notes = []
         if exposure_ok is True:
-            notes.append("Tool listesi senaryoyla uyumlu.")
+            notes.append("Tool list matches the scenario.")
         elif exposure_ok is False:
-            notes.append("Tool listesi senaryo beklentisiyle eşleşmiyor.")
+            notes.append("Tool list does not match the scenario expectation.")
         if not build_calls:
             notes.append(
-                "Workflow build aşamasına geçilmedi; build_workflow_bulk hiç çağrılmadı."
+                "Workflow build stage was not reached; build_workflow_bulk was never called."
             )
             if any(call.tool_name == "list_forms" for call in calls):
                 notes.append(
-                    "Yeni workflow testinde mevcut form listesine sapılmış; bu B sonucu incomplete sayılmalı."
+                    "Diverged to existing form list in new workflow test; this B result should be considered incomplete."
                 )
         form_prompt_attempts = [call for call in build_calls if call.arguments.get("form_prompt")]
         created_form_builds = _created_form_builds(build_calls)
@@ -420,45 +420,45 @@ def experiment_run_rows(limit: int = 25, latest_per_scenario: bool = True) -> li
         if build_arguments.get("trigger_form_id") and not build_arguments.get("form_prompt"):
             if mcp_created_trigger:
                 notes.append(
-                    "Trigger form aynı session içinde MCP build_workflow_bulk form_prompt ile üretildi; "
-                    "final build bu hazır trigger_form_id ile workflow'u kurdu."
+                    "Trigger form was created with form_prompt in the same session; "
+                    "final build used this ready trigger_form_id."
                 )
             else:
                 notes.append(
-                    "Form ChatGPT tarafındaki Jotform Form plugin/tool ile oluşturuldu; "
-                    "workflow MCP final build'de hazır trigger_form_id kullandı."
+                    "Form was created via ChatGPT plugin/tool; "
+                    "workflow used the pre-created trigger_form_id in final build."
                 )
             if form_prompt_attempts:
                 notes.append(
-                    "Aynı session içinde daha önce form_prompt ile deneme yapılmış; "
-                    "final workflow build ise bu denemeden sonra hazır trigger_form_id bağladı."
+                    "Tried form_prompt earlier in session; "
+                    "final workflow build attached to a ready trigger_form_id after this try."
                 )
         elif build_arguments.get("form_prompt"):
-            notes.append("Trigger form MCP build_workflow_bulk içinde form_prompt ile üretildi.")
+            notes.append("Trigger form was created with form_prompt in MCP build_workflow_bulk.")
         if template_result_counts and max(template_result_counts) == 0:
-            notes.append("Template araması çağrıldı ancak eşleşen template sonucu dönmedi.")
+            notes.append("Template search was called but returned no matching templates.")
         elif template_result_counts:
-            notes.append(f"Template araması {max(template_result_counts)} eşleşme döndürdü.")
+            notes.append(f"Template search returned {max(template_result_counts)} matches.")
         empty_build_attempts = [
             call for call in build_calls
             if not (call.arguments.get("steps") or [])
         ]
         if empty_build_attempts:
-            notes.append(f"{len(empty_build_attempts)} build_workflow_bulk çağrısı steps olmadan yapıldı.")
+            notes.append(f"{len(empty_build_attempts)} build_workflow_bulk calls were made without steps.")
         if build_errors:
-            notes.append(f"{build_errors} build_workflow_bulk denemesi error alanı döndürdü.")
+            notes.append(f"{build_errors} build_workflow_bulk attempts returned an error field.")
         if len(distinct_workflow_ids) > 1:
             final_workflow_id = str(build_payload.get("workflow_id") or "")
             abandoned = [workflow_id for workflow_id in distinct_workflow_ids if workflow_id != final_workflow_id]
             notes.append(
-                f"Aynı session içinde {len(distinct_workflow_ids)} farklı workflow oluşturuldu; "
-                f"final workflow dışındaki adaylar: {', '.join(abandoned) or 'yok'}."
+                f"{len(distinct_workflow_ids)} distinct workflows created in session; "
+                f"abandoned candidates: {', '.join(abandoned) or 'none'}."
             )
         notes.extend(_repeated_tool_notes(calls))
         if session_findings:
-            notes.append(f"{len(session_findings)} dashboard finding oluştu.")
+            notes.append(f"{len(session_findings)} dashboard findings generated.")
         if warnings:
-            notes.append(f"{len(warnings)} normalizasyon uyarısı var.")
+            notes.append(f"{len(warnings)} normalization warnings present.")
         rows.append({
             "session": session,
             "scenario": scenario,

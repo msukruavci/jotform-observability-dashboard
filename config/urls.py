@@ -22,5 +22,8 @@ urlpatterns = [
     path("findings/", views.FindingsView.as_view(), name="findings"),
     path("costs/", views.CostView.as_view(), name="costs"),
     path("data-health/", views.DataHealthView.as_view(), name="data-health"),
+    path("feature-requests/", views.FeatureRequestsView.as_view(), name="feature-requests"),
+    path("function-traces/", views.FunctionTracesView.as_view(), name="function-traces"),
+    path("generated-elements/", views.GeneratedElementsView.as_view(), name="generated-elements"),
     path("api/v1/", include("apps.core.api_urls")),
 ]

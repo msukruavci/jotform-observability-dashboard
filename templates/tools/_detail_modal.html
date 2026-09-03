@@ -31,27 +31,27 @@
       <!-- Top KPI Stats (4-Grid) -->
       <div class="stats-pills tool-kpi-grid">
         <div class="pill">
-          <span class="pill-label">Toplam Çağrı &amp; Başarı</span>
+          <span class="pill-label">Total Calls &amp; Success</span>
           <strong class="mono">{{ tool_data.total_calls }}</strong>
           <small class="pill-sub">
-            <span class="text-success">{{ tool_data.success_count }} başarılı</span> · 
-            <span class="{% if tool_data.error_count > 0 %}text-danger{% else %}text-muted{% endif %}">{{ tool_data.error_count }} hata ({{ tool_data.error_rate }}%)</span>
+            <span class="text-success">{{ tool_data.success_count }} success</span> ·
+            <span class="{% if tool_data.error_count > 0 %}text-danger{% else %}text-muted{% endif %}">{{ tool_data.error_count }} error(s) ({{ tool_data.error_rate }}%)</span>
           </small>
         </div>
         <div class="pill">
-          <span class="pill-label">Gecikme (p50 / p95)</span>
+          <span class="pill-label">Latency (p50 / p95)</span>
           <strong class="mono">{{ tool_data.latency.p50_ms }} ms</strong>
           <small class="pill-sub">p95: {{ tool_data.latency.p95_ms }} ms · min/max: {{ tool_data.latency.min_ms }}-{{ tool_data.latency.max_ms }} ms</small>
         </div>
         <div class="pill">
-          <span class="pill-label">Veri Transferi</span>
+          <span class="pill-label">Data Transferred</span>
           <strong class="mono">{{ tool_data.data_transferred.avg_bytes_formatted }}</strong>
-          <small class="pill-sub">Toplam: {{ tool_data.data_transferred.total_bytes_formatted }} payload</small>
+          <small class="pill-sub">Total: {{ tool_data.data_transferred.total_bytes_formatted }} payload</small>
         </div>
         <div class="pill">
           <span class="pill-label">Jotform Cloud HTTP</span>
-          <strong class="mono">{{ tool_data.http_stats.avg_http_count }} /çağrı</strong>
-          <small class="pill-sub">Toplam {{ tool_data.http_stats.total_http_count }} HTTP API isteği</small>
+          <strong class="mono">{{ tool_data.http_stats.avg_http_count }} /call</strong>
+          <small class="pill-sub">Total {{ tool_data.http_stats.total_http_count }} HTTP API requests</small>
         </div>
       </div>
 
@@ -60,7 +60,7 @@
         <!-- Latency Distribution Histogram -->
         <div class="tool-subpanel">
           <div class="subpanel-head">
-            <h3>⏱️ Gecikme Dağılımı (Latency Buckets)</h3>
+            <h3>⏱️ Latency Distribution (Buckets)</h3>
             <span class="muted font-11">p90: {{ tool_data.latency.p90_ms }} ms · p99: {{ tool_data.latency.p99_ms }} ms</span>
           </div>
           <div class="histogram-bars">
@@ -82,8 +82,8 @@
         <!-- Platform & Model Breakdown with Base-Rate Normalization -->
         <div class="tool-subpanel">
           <div class="subpanel-head">
-            <h3>🤖 Platform &amp; Model Kullanım Oranları</h3>
-            <span class="muted font-11">Normalize edilmiş oturum penetrasyonu &amp; çağrı payı</span>
+            <h3>🤖 Platform &amp; Model Usage Rates</h3>
+            <span class="muted font-11">Normalized session penetration &amp; call share</span>
           </div>
           <div class="platform-stats-list">
             {% for p in tool_data.platforms_breakdown %}
@@ -96,22 +96,22 @@
                 <div class="platform-bar-wrapper">
                   <div class="platform-bar-fill platform-{{ p.platform }}" style="width: {{ p.session_penetration_pct }}%;"></div>
                 </div>
-                <span class="mono platform-num" title="Oturum penetrasyon oranı">%{{ p.session_penetration_pct }}</span>
+                <span class="mono platform-num" title="Session penetration rate">%{{ p.session_penetration_pct }}</span>
               </div>
               <div class="platform-stat-sub">
-                <span>{{ p.sessions_used }}/{{ p.total_platform_sessions }} oturumda kullanıldı</span> · 
-                <span>{{ p.count }} çağrı (Platform içi payı: %{{ p.share_of_platform_calls_pct }})</span> · 
-                <span class="mono font-10">{{ p.avg_calls_per_session }} çağrı/oturum</span>
+                <span>{{ p.sessions_used }}/{{ p.total_platform_sessions }} sessions used</span> ·
+                <span>{{ p.count }} calls (Intra-platform share: %{{ p.share_of_platform_calls_pct }})</span> ·
+                <span class="mono font-10">{{ p.avg_calls_per_session }} calls/session</span>
               </div>
             </div>
             {% empty %}
-            <p class="muted font-12">Henüz platform dağılım verisi yok.</p>
+            <p class="muted font-12">No platform distribution data yet.</p>
             {% endfor %}
           </div>
 
           {% if tool_data.models_breakdown %}
           <div class="models-mini-list">
-            <span class="muted font-10 uppercase tracking">En Çok Kullanan Modeller:</span>
+            <span class="muted font-10 uppercase tracking">Most Used Models:</span>
             <div class="model-tags-wrap">
               {% for m in tool_data.models_breakdown %}
               <span class="model-chip" title="{{ m.model }}">{{ m.model|truncatechars:28 }}: <strong>{{ m.count }}</strong></span>
@@ -125,13 +125,13 @@
       <!-- Sequence Flow & Transitions -->
       <div class="tool-subpanel">
         <div class="subpanel-head">
-          <h3>🔄 İş Akışı Sıralama &amp; Bağlam Analizi (Sequence Transitions)</h3>
-          <span class="muted font-11">Bu tooldan önce ve sonra çağrılan tool'lar</span>
+          <h3>🔄 Sequence Flow &amp; Context Analysis (Transitions)</h3>
+          <span class="muted font-11">Tools invoked before and after this tool</span>
         </div>
         <div class="sequence-grid">
           <!-- Preceding -->
           <div class="sequence-col">
-            <span class="sequence-title">⬅️ Önce Çağrılan Tool'lar (Preceding)</span>
+            <span class="sequence-title">⬅️ Preceding Tools</span>
             <div class="sequence-list">
               {% for item in tool_data.sequence_flow.preceding %}
               <div class="sequence-item">
@@ -140,14 +140,14 @@
                 <span class="sequence-count badge badge-subtle">{{ item.count }}x</span>
               </div>
               {% empty %}
-              <p class="muted font-11">Önceki adım verisi yok (Genellikle ilk adım).</p>
+              <p class="muted font-11">No preceding step data (Usually the first step).</p>
               {% endfor %}
             </div>
           </div>
 
           <!-- Subsequent -->
           <div class="sequence-col">
-            <span class="sequence-title">➡️ Sonra Çağrılan Tool'lar (Subsequent)</span>
+            <span class="sequence-title">➡️ Subsequent Tools</span>
             <div class="sequence-list">
               {% for item in tool_data.sequence_flow.subsequent %}
               <div class="sequence-item">
@@ -156,7 +156,7 @@
                 <span class="sequence-count badge badge-subtle">{{ item.count }}x</span>
               </div>
               {% empty %}
-              <p class="muted font-11">Sonraki adım verisi yok (Genellikle son adım).</p>
+              <p class="muted font-11">No subsequent step data (Usually the last step).</p>
               {% endfor %}
             </div>
           </div>
@@ -167,14 +167,14 @@
       {% if tool_data.http_stats.top_endpoints %}
       <div class="tool-subpanel">
         <div class="subpanel-head">
-          <h3>🌐 Çağrılan Jotform API Uç Noktaları (Cloud API Traces)</h3>
-          <span class="muted font-11">Toplam {{ tool_data.http_stats.total_http_count }} HTTP isteği</span>
+          <h3>🌐 Jotform API Endpoints Called (Cloud Traces)</h3>
+          <span class="muted font-11">Total {{ tool_data.http_stats.total_http_count }} HTTP requests</span>
         </div>
         <div class="endpoint-chips">
           {% for ep in tool_data.http_stats.top_endpoints %}
           <div class="endpoint-chip">
             <code class="mono">{{ ep.endpoint }}</code>
-            <span class="badge badge-subtle">{{ ep.count }} istek ({{ ep.pct }}%)</span>
+            <span class="badge badge-subtle">{{ ep.count }} request(s) ({{ ep.pct }}%)</span>
           </div>
           {% endfor %}
         </div>
@@ -185,8 +185,8 @@
       {% if tool_data.top_errors %}
       <div class="tool-subpanel error-subpanel">
         <div class="subpanel-head">
-          <h3>⚠️ Karşılaşılan Hatalar &amp; Sebepleri</h3>
-          <span class="badge badge-danger">{{ tool_data.error_count }} hata kaydı</span>
+          <h3>⚠️ Top Errors &amp; Reasons</h3>
+          <span class="badge badge-danger">{{ tool_data.error_count }} error record(s)</span>
         </div>
         <div class="error-list">
           {% for err in tool_data.top_errors %}
@@ -199,12 +199,12 @@
       </div>
       {% endif %}
 
-      <!-- ================= STEP-BY-STEP INVOCATIONS (ADIM ADIM TÜM ÇAĞRILMALAR) ================= -->
+      <!-- ================= STEP-BY-STEP INVOCATIONS ================= -->
       <div class="invocations-section">
         <div class="invocations-head">
           <div>
-            <h3>📜 Adım Adım Tüm Çağrılmalar (Call History &amp; Filters)</h3>
-            <p class="muted font-12">Bu toolun tüm oturumlardaki geçmiş çağrıları, girdi/çıktı JSON'ları, HTTP alt izleri ve çok boyutlu filtreleme.</p>
+            <h3>📜 Step-by-Step Invocation History &amp; Filters</h3>
+            <p class="muted font-12">Call history across all sessions, input/output JSONs, HTTP traces, and multi-dimensional filtering.</p>
           </div>
         </div>
 
@@ -217,10 +217,10 @@
 <div class="modal-backdrop" id="tool-modal-backdrop" onclick="closeToolModal()">
   <div class="modal-card">
     <div class="modal-head">
-      <h2>Tool Bulunamadı</h2>
+      <h2>Tool Not Found</h2>
       <button class="icon-button" type="button" onclick="closeToolModal()">&times;</button>
     </div>
-    <div class="modal-body"><p class="muted">Belirtilen tool adına ait kayıt bulunamadı.</p></div>
+    <div class="modal-body"><p class="muted">No records found for the specified tool.</p></div>
   </div>
 </div>
 {% endif %}

@@ -24,15 +24,15 @@
     <div class="export-btn-group">
       <a class="button" href="{% url 'session-export-pdf-view' session.id %}" target="_blank" title="Open printable report / Export as PDF">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span>PDF Raporu</span>
+        <span>PDF Report</span>
       </a>
       <button class="button" type="button" style="background: linear-gradient(135deg, #7c5ac7 0%, #c084fc 100%); border-color: transparent; color: white;" onclick="openAIModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        <span>🤖 AI Analizi</span>
+        <span>🤖 AI Analysis</span>
       </button>
       <a class="button secondary" href="{% url 'session-export-json' session.id %}" download title="Download full trace as JSON">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>JSON İndir</span>
+        <span>Download JSON</span>
       </a>
       <a class="button secondary" href="{% url 'session-export-markdown' session.id %}" download title="Download summary as Markdown">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -53,11 +53,11 @@
     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
       {% if timing_breakdown.has_idle_gap %}
         <span style="background: rgba(234, 179, 8, 0.18); color: #eab308; padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700;">
-          ⚠️ +{{ timing_breakdown.idle_gap_formatted }} Boşta / Şüpheli Gecikme
+          ⚠️ +{{ timing_breakdown.idle_gap_formatted }} Idle / Suspicious Gap
         </span>
       {% endif %}
       <span style="background: rgba(124, 90, 199, 0.15); color: #a855f7; font-weight: 700; padding: 4px 12px; border-radius: 999px; font-size: 0.88rem;">
-        ⚡ Efektif Aktif Süre: {{ timing_breakdown.active_duration_formatted }}
+        ⚡ Effective Active Duration: {{ timing_breakdown.active_duration_formatted }}
       </span>
     </div>
   </div>
@@ -66,40 +66,40 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 16px;">
       <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #c084fc;">🧠 LLM Sentez / Akıl Yürütme</span>
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #c084fc;">🧠 LLM Synthesis / Reasoning</span>
           <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.15); color: #c084fc; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_llm }}%</span>
         </div>
         <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.llm_active_formatted }}</strong>
-        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Tool aralarında token üretimi & planlama</small>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Token generation &amp; planning between tools</small>
       </div>
 
       <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #4ade80;">🌐 Jotform Cloud API (HTTP)</span>
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #4ade80;">🌐 Jotform Cloud API</span>
           <span style="font-size: 0.75rem; background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_api }}%</span>
         </div>
         <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.jotform_api_formatted }}</strong>
-        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Form Copilot, updateTree & GET istekleri</small>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Form Copilot, updateTree &amp; GET requests</small>
       </div>
 
       <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #fb923c;">⚙️ MCP Sunucu Motoru</span>
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #fb923c;">⚙️ MCP Server Engine</span>
           <span style="font-size: 0.75rem; background: rgba(255, 97, 0, 0.15); color: #fb923c; padding: 1px 6px; border-radius: 4px; font-weight: 700;">{{ timing_breakdown.pct_mcp }}%</span>
         </div>
         <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.mcp_internal_formatted }}</strong>
-        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Auto-Layout, RAG tarama & Preflight test</small>
+        <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">Auto-Layout, RAG scanning &amp; Preflight tests</small>
       </div>
 
       <div style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #60a5fa;">⏱️ Efektif vs Toplam Süre</span>
+          <span style="font-size: 0.78rem; text-transform: uppercase; font-weight: 700; color: #60a5fa;">⏱️ Effective vs Wall Duration</span>
         </div>
         <strong style="font-size: 1.3rem; color: var(--ink, #fff);">{{ timing_breakdown.active_duration_formatted }}</strong>
         <small style="display: block; color: var(--muted, #8b949e); font-size: 0.75rem; margin-top: 4px;">
-          Toplam açık kalma: {{ timing_breakdown.wall_duration_formatted }}
+          Total wall duration: {{ timing_breakdown.wall_duration_formatted }}
           {% if timing_breakdown.has_idle_gap %}
-            <span style="color: #eab308;">(⚠️ {{ timing_breakdown.idle_gap_formatted }} boşta)</span>
+            <span style="color: #eab308;">(⚠️ {{ timing_breakdown.idle_gap_formatted }} idle)</span>
           {% endif %}
         </small>
       </div>
@@ -108,18 +108,18 @@
     {% if timing_breakdown.active_duration_ms > 0 %}
       <div style="margin-top: 10px;">
         <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-secondary, #c9d1d9); margin-bottom: 6px;">
-          <span>Katman Bazlı Zaman Dağılımı</span>
-          <span>Aktif Toplam: <strong>{{ timing_breakdown.active_duration_formatted }}</strong></span>
+          <span>Layer-Based Timing Distribution</span>
+          <span>Active Total: <strong>{{ timing_breakdown.active_duration_formatted }}</strong></span>
         </div>
         <div style="display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.06);">
-          <div style="width: {{ timing_breakdown.pct_llm }}%; background: #a855f7;" title="LLM Sentez: {{ timing_breakdown.llm_active_formatted }} ({{ timing_breakdown.pct_llm }}%)"></div>
+          <div style="width: {{ timing_breakdown.pct_llm }}%; background: #a855f7;" title="LLM Synthesis: {{ timing_breakdown.llm_active_formatted }} ({{ timing_breakdown.pct_llm }}%)"></div>
           <div style="width: {{ timing_breakdown.pct_api }}%; background: #22c55e;" title="Jotform API: {{ timing_breakdown.jotform_api_formatted }} ({{ timing_breakdown.pct_api }}%)"></div>
-          <div style="width: {{ timing_breakdown.pct_mcp }}%; background: #ff6100;" title="MCP Motoru: {{ timing_breakdown.mcp_internal_formatted }} ({{ timing_breakdown.pct_mcp }}%)"></div>
+          <div style="width: {{ timing_breakdown.pct_mcp }}%; background: #ff6100;" title="MCP Engine: {{ timing_breakdown.mcp_internal_formatted }} ({{ timing_breakdown.pct_mcp }}%)"></div>
         </div>
         <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 0.75rem; margin-top: 8px; flex-wrap: wrap;">
           <span style="display: inline-flex; align-items: center; gap: 6px; color: #c084fc;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #a855f7; display: inline-block;"></i> 🧠 LLM: <strong>{{ timing_breakdown.llm_active_formatted }}</strong> ({{ timing_breakdown.pct_llm }}%)</span>
           <span style="display: inline-flex; align-items: center; gap: 6px; color: #4ade80;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;"></i> 🌐 Jotform API: <strong>{{ timing_breakdown.jotform_api_formatted }}</strong> ({{ timing_breakdown.pct_api }}%)</span>
-          <span style="display: inline-flex; align-items: center; gap: 6px; color: #fb923c;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #ff6100; display: inline-block;"></i> ⚙️ MCP Motoru: <strong>{{ timing_breakdown.mcp_internal_formatted }}</strong> ({{ timing_breakdown.pct_mcp }}%)</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #fb923c;"><i style="width: 8px; height: 8px; border-radius: 50%; background: #ff6100; display: inline-block;"></i> ⚙️ MCP Engine: <strong>{{ timing_breakdown.mcp_internal_formatted }}</strong> ({{ timing_breakdown.pct_mcp }}%)</span>
         </div>
       </div>
     {% endif %}
@@ -233,7 +233,7 @@
       {% if item.turn.gap_before_formatted %}
         <div class="turn-gap-indicator" style="display: flex; align-items: center; justify-content: center; margin: 18px 0 10px;">
           <span style="background: rgba(234, 179, 8, 0.15); color: #eab308; font-size: 0.78rem; font-weight: 700; padding: 4px 14px; border-radius: 999px; border: 1px dashed rgba(234, 179, 8, 0.4);">
-            ⏳ Turlar Arası Kullanıcı Beklemesi / Duraksama: +{{ item.turn.gap_before_formatted }} (Aktif Süreden Düşüldü)
+            ⏳ Inter-Turn User Wait / Gap: +{{ item.turn.gap_before_formatted }} (Deducted from Active Duration)
           </span>
         </div>
       {% endif %}
@@ -242,7 +242,7 @@
         <span>
           Turn {{ item.turn.sequence_no }}
           {% if item.turn.is_synthetic %}
-            <small style="background: rgba(124, 90, 199, 0.18); color: #c084fc; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px;">Otomatik Algılanan İşlem Döngüsü</small>
+            <small style="background: rgba(124, 90, 199, 0.18); color: #c084fc; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px;">Auto-Detected Operation Cycle</small>
           {% endif %}
         </span>
         <i></i>
@@ -252,8 +252,8 @@
       <div class="chat-message user-message">
         <div class="chat-avatar user-avatar">{% if item.turn.is_synthetic %}⚡{% else %}S{% endif %}</div>
         <div class="chat-body">
-          <div class="chat-meta"><strong>{% if item.turn.is_synthetic %}İşlem Amacı / Saptanan İstek{% else %}You (Kullanıcı İsteği){% endif %}</strong><span>User request / Intent</span></div>
-          <div class="message-text" style="font-weight: 500;">{{ item.turn.question|default:"İşlem döngüsü başlatıldı." }}</div>
+          <div class="chat-meta"><strong>{% if item.turn.is_synthetic %}Operation Intent / Detected Request{% else %}You (User Request){% endif %}</strong><span>User request / Intent</span></div>
+          <div class="message-text" style="font-weight: 500;">{{ item.turn.question|default:"Operation cycle started." }}</div>
         </div>
       </div>
 
@@ -267,11 +267,11 @@
                 <div class="operation-gap-badge" style="display: flex; align-items: center; justify-content: center; margin: 8px 0; font-size: 0.72rem;">
                   {% if operation.gap_type == 'user_wait' %}
                     <span style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px dashed rgba(234, 179, 8, 0.4); padding: 2px 10px; border-radius: 999px; font-weight: 600;">
-                      👤 Kullanıcı Onay/Yanıt Bekleme: +{{ operation.gap_formatted }} (İzole Edildi)
+                      👤 Waiting for User Approval/Response: +{{ operation.gap_formatted }} (Isolated)
                     </span>
                   {% else %}
                     <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); padding: 2px 10px; border-radius: 999px; font-weight: 600;">
-                      🧠 LLM Düşünme & Sentez: +{{ operation.gap_formatted }}
+                      🧠 LLM Thinking &amp; Synthesis: +{{ operation.gap_formatted }}
                     </span>
                   {% endif %}
                 </div>
@@ -532,14 +532,14 @@
         Gemini AI Analizi
       </h3>
       <p id="model-quota-badge" style="margin:4px 0 0 0; font-size:0.78rem; color:#94a3b8;">
-        RPD: <strong id="badge-rpd" style="color:#4ade80;">500 / 500</strong> Kalan · <strong id="badge-rpm" style="color:#a855f7;">15 RPM</strong>
+        RPD: <strong id="badge-rpd" style="color:#4ade80;">500 / 500</strong> Remaining · <strong id="badge-rpm" style="color:#a855f7;">15 RPM</strong>
       </p>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <select id="model-selector" form="ai-form" name="model" onchange="updateModelBadge(this)" style="background:#222430; color:#f1f5f9; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 12px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer;">
         {% for st in ai_model_stats_list %}
           <option value="{{ st.id }}" data-rpd="{{ st.remaining }}/{{ st.rpd }}" data-rpm="{{ st.rpm }}" {% if st.id == "gemini-3.5-flash-lite" %}selected{% endif %}>
-            {{ st.name }} ({{ st.remaining }}/{{ st.rpd }} Kalan)
+            {{ st.name }} ({{ st.remaining }}/{{ st.rpd }} Remaining)
           </option>
         {% endfor %}
       </select>
@@ -551,14 +551,14 @@
   
   <div id="ai-analysis-content" style="flex:1; overflow-y:auto; padding:24px; font-size:0.92rem; line-height:1.7;">
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#94a3b8;">
-      <p style="text-align:center;">Analiz başlatmak için modeli seçip <strong>"Analiz Et"</strong> butonuna basın.<br><span style="font-size:0.8rem; color:#64748b;">(Dilerseniz alttaki kutudan spesifik soru da sorabilirsiniz)</span></p>
+      <p style="text-align:center;">Select a model and click <strong>"Analyze"</strong> to start the analysis.<br><span style="font-size:0.8rem; color:#64748b;">(You can also ask a specific question in the box below)</span></p>
     </div>
   </div>
   
   <div style="padding:16px 20px; border-top:1px solid rgba(255, 255, 255, 0.08); background:#121318; border-radius:0 0 14px 14px;">
     <form id="ai-form" hx-get="{% url 'session-ai-analysis' session.id %}" hx-target="#ai-analysis-content" style="display:flex; gap:10px;">
-      <input type="text" name="question" placeholder="Soru sor (Örn: Neden bu kadar sürdü?)" style="flex:1; padding:11px 16px; border-radius:8px; border:1px solid rgba(255, 255, 255, 0.12); background:#1c1d25; color:#ffffff; font-size:0.9rem; outline:none;">
-      <button type="submit" id="ai-submit-btn" class="button" style="background:linear-gradient(135deg, #7c5ac7 0%, #a855f7 100%); color:white; border:none; font-weight:600; padding:0 20px; border-radius:8px; cursor:pointer;">Analiz Et</button>
+      <input type="text" name="question" placeholder="Ask a question (e.g. Why did this take so long?)" style="flex:1; padding:11px 16px; border-radius:8px; border:1px solid rgba(255, 255, 255, 0.12); background:#1c1d25; color:#ffffff; font-size:0.9rem; outline:none;">
+      <button type="submit" id="ai-submit-btn" class="button" style="background:linear-gradient(135deg, #7c5ac7 0%, #a855f7 100%); color:white; border:none; font-weight:600; padding:0 20px; border-radius:8px; cursor:pointer;">Analyze</button>
     </form>
   </div>
 </div>
@@ -575,7 +575,7 @@
   document.body.addEventListener('htmx:beforeRequest', function(evt) {
     if (evt.detail.elt.id === 'ai-form') {
       const btn = document.getElementById('ai-submit-btn');
-      btn.innerHTML = 'Analiz Ediliyor...';
+      btn.innerHTML = 'Analyzing...';
       btn.disabled = true;
     }
   });
@@ -583,7 +583,7 @@
   document.body.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail.elt.id === 'ai-form') {
       const btn = document.getElementById('ai-submit-btn');
-      btn.innerHTML = 'Analiz Et';
+      btn.innerHTML = 'Analyze';
       btn.disabled = false;
     }
   });

@@ -440,9 +440,9 @@
   <div class="action-bar">
     <h2><span class="brand-dot"></span> Jotform MCP Observability Flow Report</h2>
     <div class="btn-group">
-      <button class="btn btn-primary" onclick="window.print()">🖨️ PDF Olarak Kaydet / Yazdır</button>
-      <a class="btn btn-secondary" href="{% url 'session-export-json' session.id %}">💾 JSON İndir</a>
-      <a class="btn btn-secondary" href="{% url 'session-detail' session.id %}">← Dashboard'a Dön</a>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Save as PDF / Print</button>
+      <a class="btn btn-secondary" href="{% url 'session-export-json' session.id %}">💾 Download JSON</a>
+      <a class="btn btn-secondary" href="{% url 'session-detail' session.id %}">← Back to Dashboard</a>
     </div>
   </div>
 
@@ -471,19 +471,19 @@
       <!-- KPI Grid -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span>Toplam Süre</span>
+          <span>Total Duration</span>
           <strong>{{ session.duration_ms|floatformat:0|default:"—" }} ms</strong>
         </div>
         <div class="kpi-card">
-          <span>Konuşma Turu</span>
-          <strong>{{ session.turns.count }} Turn</strong>
+          <span>Conversation Turns</span>
+          <strong>{{ session.turns.count }} Turn(s)</strong>
         </div>
         <div class="kpi-card">
-          <span>Toplam Span / İşlem</span>
+          <span>Total Spans / Operations</span>
           <strong>{{ session.spans.count }}</strong>
         </div>
         <div class="kpi-card">
-          <span>Bulgu (Findings)</span>
+          <span>Findings</span>
           <strong>{{ findings.count }}</strong>
         </div>
         <div class="kpi-card">
@@ -494,24 +494,24 @@
 
       <!-- Conversation Flow & Tool Activity -->
       {% if conversation %}
-        <div class="section-title"><i></i> Konuşma ve MCP Tool Çağrı Akışı</div>
+        <div class="section-title"><i></i> Conversation and MCP Tool Flow</div>
         {% for item in conversation %}
           <div class="turn-box">
             <div class="turn-header">
               <span>Turn #{{ item.turn.sequence_no }}</span>
-              <span>Süre: {{ item.turn.duration_ms|floatformat:0 }} ms · Tokens: In {{ item.turn.input_tokens|default:"—" }} / Out {{ item.turn.output_tokens|default:"—" }}</span>
+              <span>Duration: {{ item.turn.duration_ms|floatformat:0 }} ms · Tokens: In {{ item.turn.input_tokens|default:"—" }} / Out {{ item.turn.output_tokens|default:"—" }}</span>
             </div>
 
             <!-- User Prompt -->
             <div class="prompt-block">
-              <div class="prompt-label">👤 Kullanıcı İstemi (User Request)</div>
-              <div class="prompt-text">{{ item.turn.question|default:"(İstek metni kayıtlı değil)" }}</div>
+              <div class="prompt-label">👤 User Prompt</div>
+              <div class="prompt-text">{{ item.turn.question|default:"(Request text not recorded)" }}</div>
             </div>
 
             <!-- Agent Tool Invocations -->
             {% if item.operations %}
               <div class="tool-activity">
-                <div class="activity-heading">✦ MCP Agent Tarafından Çalıştırılan İşlemler ({{ item.operations|length }})</div>
+                <div class="activity-heading">✦ Operations Executed by MCP Agent ({{ item.operations|length }})</div>
                 {% for op in item.operations %}
                   <div class="tool-card">
                     <div class="tool-card-head">
@@ -520,7 +520,7 @@
                         {{ op.title }}
                       </div>
                       <div class="tool-meta">
-                        {{ op.span.duration_ms|floatformat:1 }} ms · Durum: {{ op.span.status }}
+                        {{ op.span.duration_ms|floatformat:1 }} ms · Status: {{ op.span.status }}
                       </div>
                     </div>
                     <div class="tool-body">
@@ -531,7 +531,7 @@
                         </div>
                       {% empty %}
                         <div class="param-group">
-                          <div class="param-label">Ham Çıktı / Payload</div>
+                          <div class="param-label">Raw Output / Payload</div>
                           <pre>{{ op.raw }}</pre>
                         </div>
                       {% endfor %}
@@ -543,8 +543,8 @@
 
             <!-- Assistant Answer -->
             <div class="answer-block">
-              <div class="answer-label">🤖 Asistan / Model Yanıtı</div>
-              <div class="answer-text">{{ item.turn.answer|default:"(Yanıt metni kayıtlı değil)" }}</div>
+              <div class="answer-label">🤖 Assistant / Model Response</div>
+              <div class="answer-text">{{ item.turn.answer|default:"(Response text not recorded)" }}</div>
             </div>
           </div>
         {% endfor %}
@@ -552,7 +552,7 @@
 
       <!-- Unassigned / Standalone MCP Operations -->
       {% if unassigned_operations %}
-        <div class="section-title"><i></i> Bağımsız MCP Tool & API İşlemleri ({{ total_operations_count|default:unassigned_operations|length }})</div>
+        <div class="section-title"><i></i> Standalone MCP Tool &amp; API Operations ({{ total_operations_count|default:unassigned_operations|length }})</div>
         <div class="tool-activity" style="padding: 0;">
           {% for op in unassigned_operations %}
             <div class="tool-card">
@@ -585,26 +585,26 @@
 
       <!-- Findings -->
       {% if findings %}
-        <div class="section-title"><i></i> Kural Motoru Bulguları ve İyileştirmeler</div>
+        <div class="section-title"><i></i> Rule Engine Findings and Improvements</div>
         {% for f in findings %}
           <div class="finding-card">
-            <div class="finding-title">[{{ f.rule_code }}] {{ f.display_title }} (Kayıp Zaman: ~{{ f.wasted_ms|floatformat:0 }} ms)</div>
+            <div class="finding-title">[{{ f.rule_code }}] {{ f.display_title }} (Wasted Time: ~{{ f.wasted_ms|floatformat:0 }} ms)</div>
             <div class="finding-desc">{{ f.display_description }}</div>
-            <div class="finding-rec"><strong>Öneri:</strong> {{ f.display_recommendation }}</div>
+            <div class="finding-rec"><strong>Recommendation:</strong> {{ f.display_recommendation }}</div>
           </div>
         {% endfor %}
       {% endif %}
 
       <!-- Execution Waterfall Timeline -->
       {% if waterfall %}
-        <div class="section-title"><i></i> Kritik Yol Zaman Çizelgesi (Execution Timeline)</div>
+        <div class="section-title"><i></i> Critical Path Execution Timeline</div>
         <table class="timeline-table">
           <thead>
             <tr>
-              <th>Adım / İşlem</th>
-              <th>Tür</th>
-              <th>Durum</th>
-              <th style="text-align: right;">Süre</th>
+              <th>Step / Operation</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th style="text-align: right;">Duration</th>
             </tr>
           </thead>
           <tbody>
@@ -622,7 +622,7 @@
 
       <!-- Footer -->
       <div class="report-footer">
-        <span>Oluşturulma Tarihi: {% now "d M Y H:i:s" %}</span>
+        <span>Generated At: {% now "d M Y H:i:s" %}</span>
         <span>Jotform Workflow MCP Observability Suite</span>
       </div>
 

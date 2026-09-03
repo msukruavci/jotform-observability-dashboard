@@ -203,7 +203,7 @@ def response_from_event(event: dict[str, Any], fallback: Any) -> Any:
     return fallback
 
 
-def operation_card(span, raw_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def operation_card(span, raw_events: list[dict[str, Any]] | None = None, children: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     card: dict[str, Any] = {
         "span": span,
         "kind": span.kind,
@@ -215,6 +215,7 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None) -> dict
         "fields": [],
         "exchanges": [],
         "raw": pretty_payload(span.attributes),
+        "children": children or [],
     }
     tool = getattr(span, "tool_call", None)
     external = getattr(span, "external_call", None)
@@ -308,11 +309,17 @@ def session_created_resources(session) -> dict[str, Any]:
     )
 
     for call in tool_calls:
-        args = parse_json_string(call.arguments) or {}
-        res = parse_json_string(call.result) or {}
+        args = parse_json_string(call.arguments)
+        if not isinstance(args, dict):
+            args = {}
+            
+        res = parse_json_string(call.result)
+        if not isinstance(res, dict):
+            res = {}
+
         tool_name = call.tool_name
 
-        if not isinstance(res, dict):
+        if not res and not args:
             continue
 
         # Extract workflows

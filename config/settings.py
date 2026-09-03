@@ -4,12 +4,30 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def env_bool(name: str, default: bool) -> bool:
+    return os.environ.get(name, "1" if default else "0").strip().lower() in {"1", "true", "yes", "on"}
+
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "development-only-secret-key")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+DEBUG = env_bool("DJANGO_DEBUG", True)
+if not DEBUG and SECRET_KEY in {"", "development-only-secret-key", "change-me-in-production"}:
+    raise ImproperlyConfigured("Set a strong DJANGO_SECRET_KEY before running with DJANGO_DEBUG=0.")
 ALLOWED_HOSTS = [item.strip() for item in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",") if item.strip()]
+
+SECURE_SSL_REDIRECT = not DEBUG and env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
+SESSION_COOKIE_SECURE = not DEBUG and env_bool("DJANGO_SESSION_COOKIE_SECURE", True)
+CSRF_COOKIE_SECURE = not DEBUG and env_bool("DJANGO_CSRF_COOKIE_SECURE", True)
+SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "31536000" if not DEBUG else "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG and env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+SECURE_HSTS_PRELOAD = not DEBUG and env_bool("DJANGO_SECURE_HSTS_PRELOAD", True)
+if not DEBUG and env_bool("DJANGO_TRUST_PROXY_SSL_HEADER", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

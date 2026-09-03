@@ -279,7 +279,9 @@ def normalize_mcp_event(payload: dict) -> None:
     correlation_attributes = {
         key: payload[key] for key in ("task_id", "turn_id", "model_step_id") if payload.get(key)
     }
-    if event_type.startswith("mcp.tool_call."):
+    if event_type.startswith("mcp.tool_call.") or event_type.startswith("function.call."):
+        is_function = event_type.startswith("function.call.")
+        tool_name = str(payload.get("function") if is_function else payload.get("tool") or "unknown_tool")
         if phase == "started":
             Span.objects.get_or_create(
                 session=session, request_id=request_id,
@@ -287,7 +289,7 @@ def normalize_mcp_event(payload: dict) -> None:
                     "turn": turn, "parent": parent,
                     "trace_id": str(payload.get("trace_id") or session.external_session_id),
                     "external_span_id": str(payload.get("span_id") or ""),
-                    "kind": "tool", "name": str(payload.get("tool") or "unknown_tool"),
+                    "kind": "tool", "name": tool_name,
                     "sequence_no": session.spans.filter(kind="tool").count() + 1,
                     "started_at": timestamp, "status": "running",
                     "attributes": {"correlation_confidence": "high" if payload.get("trace_id") else "low", **correlation_attributes},
@@ -296,12 +298,13 @@ def normalize_mcp_event(payload: dict) -> None:
         else:
             span = session.spans.filter(request_id=request_id, kind="tool").first()
             if not span:
-                span = Span.objects.create(session=session, turn=turn, parent=parent, request_id=request_id, external_span_id=str(payload.get("span_id") or ""), trace_id=str(payload.get("trace_id") or session.external_session_id), kind="tool", name=str(payload.get("tool") or "unknown_tool"), started_at=timestamp, attributes={"missing_started_event": True, **correlation_attributes})
+                span = Span.objects.create(session=session, turn=turn, parent=parent, request_id=request_id, external_span_id=str(payload.get("span_id") or ""), trace_id=str(payload.get("trace_id") or session.external_session_id), kind="tool", name=tool_name, started_at=timestamp, attributes={"missing_started_event": True, **correlation_attributes})
             span.ended_at = timestamp
             span.duration_ms = float(payload.get("duration_ms") or ((timestamp - span.started_at).total_seconds() * 1000 if span.started_at else 0))
-            span.status = "error" if phase == "failed" or payload.get("is_error") else "ok"
-            span.save()
             result = json_value(payload.get("result") or payload.get("error"))
+            embedded_error = isinstance(result, dict) and bool(result.get("error"))
+            span.status = "error" if phase == "failed" or payload.get("is_error") or embedded_error else "ok"
+            span.save()
             ToolCall.objects.update_or_create(
                 span=span,
                 defaults={

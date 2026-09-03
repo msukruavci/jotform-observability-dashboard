@@ -5,11 +5,11 @@
   <div>
     <p class="eyebrow">Behavior &amp; Performance Analysis</p>
     <h1>Tool Intelligence &amp; Invocations</h1>
-    <p>Tüm MCP araçlarının çağrı frekansları, p50/p95 gecikme profilleri, hata oranları, ardışık geçiş dizilimleri ve adım adım tüm geçmiş çağrı kayıtları.</p>
+    <p>Call frequencies, p50/p95 latency profiles, error rates, sequence transitions, and step-by-step history of all MCP tools.</p>
   </div>
   {% if active_time_label %}
   <div class="page-head-actions">
-    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+    <span class="active-time-badge" title="Filtered Time">⏱️ {{ active_time_label }}</span>
   </div>
   {% endif %}
 </div>
@@ -17,24 +17,24 @@
 <!-- Overview KPI Cards -->
 <div class="metric-grid">
   <article class="metric-card accent">
-    <p>Toplam Tool Çağrısı <span>⚡</span></p>
+    <p>Total Invocations <span>⚡</span></p>
     <strong>{{ total_invocations|default:0 }}</strong>
-    <small>Tüm oturumlarda gerçekleşen MCP tool invocation sayısı</small>
+    <small>Total MCP tool invocations across all sessions</small>
   </article>
   <article class="metric-card">
-    <p>Aktif Tool Sayısı <span class="positive">🧩</span></p>
+    <p>Active Tools <span class="positive">🧩</span></p>
     <strong>{{ total_tools_count|default:0 }}</strong>
-    <small>Kayıtlı ve çağrılan benzersiz araç çeşitliliği</small>
+    <small>Unique registered and invoked tools</small>
   </article>
   <article class="metric-card">
-    <p>Genel Başarı Oranı <span>✓</span></p>
+    <p>Overall Success Rate <span>✓</span></p>
     <strong>{{ overall_success_rate|default:"100.0" }}%</strong>
-    <small>{{ total_errors|default:0 }} hata / istisna kaydı</small>
+    <small>{{ total_errors|default:0 }} errors / exceptions</small>
   </article>
   <article class="metric-card">
-    <p>Genel Gecikme Profili <span>⏱️</span></p>
+    <p>Overall Latency Profile <span>⏱️</span></p>
     <strong>{{ overall_p50_ms|default:0 }} ms</strong>
-    <small>p50 (medyan) · p95: {{ overall_p95_ms|default:0 }} ms</small>
+    <small>p50 (median) · p95: {{ overall_p95_ms|default:0 }} ms</small>
   </article>
 </div>
 
@@ -43,9 +43,9 @@
   <div class="panel-head">
     <div>
       <p class="eyebrow">Latency &amp; Volume Profile</p>
-      <h2>Çağrı Hacmi ve p95 Gecikme Karşılaştırması</h2>
+      <h2>Call Volume &amp; p95 Latency Comparison</h2>
     </div>
-    <span class="muted font-11">Grafikteki bir toola tıklayarak detaylı istatistik ve çağrı geçmişini açabilirsiniz.</span>
+    <span class="muted font-11">Click a tool in the chart to view detailed statistics and invocation history.</span>
   </div>
   <div id="tool-chart" class="chart tall" aria-label="Tool call volume and latency chart"></div>
 </article>
@@ -55,14 +55,14 @@
   <div class="panel-head" style="padding: 16px 20px; border-bottom: 1px solid var(--line); flex-direction: column; align-items: stretch; gap: 14px;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
       <div>
-        <p class="eyebrow">Tool Kataloğu &amp; Detaylı İnceleme</p>
-        <h2 style="margin: 0; font-size: 16px;">Tüm MCP Araçları ({{ tool_metrics|length }})</h2>
+        <p class="eyebrow">Tool Catalog &amp; Detailed Analysis</p>
+        <h2 style="margin: 0; font-size: 16px;">All MCP Tools ({{ tool_metrics|length }})</h2>
       </div>
       <div style="display: flex; align-items: center; gap: 12px;">
         <input
           type="text"
           id="tool-search-input"
-          placeholder="Ara (tool adı, kategori)..."
+          placeholder="Search (tool name, category)..."
           class="table-search-input"
           oninput="filterToolTable()"
         />
@@ -73,7 +73,7 @@
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 8px; border-top: 1px dashed var(--line);">
       <!-- Category Filter Pills -->
       <div class="category-pills-row" style="display: flex; gap: 4px; flex-wrap: wrap;">
-        <button type="button" class="cat-pill active" data-cat="all" onclick="filterCategory('all', this)">Tüm Kategoriler</button>
+        <button type="button" class="cat-pill active" data-cat="all" onclick="filterCategory('all', this)">All Categories</button>
         <button type="button" class="cat-pill" data-cat="Discovery &amp; Search" onclick="filterCategory('Discovery &amp; Search', this)">Discovery</button>
         <button type="button" class="cat-pill" data-cat="Building &amp; Workflow Setup" onclick="filterCategory('Building &amp; Workflow Setup', this)">Building</button>
         <button type="button" class="cat-pill" data-cat="Forms &amp; Questions" onclick="filterCategory('Forms &amp; Questions', this)">Forms</button>
@@ -87,14 +87,14 @@
     <table id="tools-data-table">
       <thead>
         <tr>
-          <th>Tool Adı &amp; Kategori</th>
-          <th class="num">Çağrı Sayısı</th>
-          <th class="num">p50 (Medyan)</th>
-          <th class="num">p95 Gecikme</th>
-          <th class="num">Hata Oranı</th>
-          <th class="num">Ort. Yanıt Boyutu</th>
-          <th class="num">Bulgular</th>
-          <th style="text-align: right; width: 130px;">Detay</th>
+          <th>Tool Name &amp; Category</th>
+          <th class="num">Call Count</th>
+          <th class="num">p50 (Median)</th>
+          <th class="num">p95 Latency</th>
+          <th class="num">Error Rate</th>
+          <th class="num">Avg Response Size</th>
+          <th class="num">Findings</th>
+          <th style="text-align: right; width: 130px;">Details</th>
         </tr>
       </thead>
       <tbody>
@@ -106,7 +106,7 @@
           hx-get="{% url 'tool-detail-modal' tool.name %}"
           hx-target="#modal-container"
           hx-swap="innerHTML"
-          title="Detaylı istatistikleri ve çağrı geçmişini görüntüle"
+          title="View detailed statistics and invocation history"
         >
           <td>
             <div class="tool-cell-content">
@@ -139,7 +139,7 @@
           <td class="num mono font-11">{{ tool.avg_result_bytes_formatted }}</td>
           <td class="num">
             {% if tool.findings > 0 %}
-            <span class="badge badge-warning font-10">{{ tool.findings }} bulgu</span>
+            <span class="badge badge-warning font-10">{{ tool.findings }} finding(s)</span>
             {% else %}
             <span class="muted font-11">—</span>
             {% endif %}
@@ -153,13 +153,13 @@
               hx-swap="innerHTML"
               onclick="event.stopPropagation();"
             >
-              İncele ↗
+              Inspect ↗
             </button>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="empty">Henüz tool kullanım verisi bulunmuyor.</td>
+          <td colspan="8" class="empty">No tool invocation data found yet.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -286,7 +286,7 @@
         xAxis: [
           {
             type: 'value',
-            name: 'Çağrı',
+            name: 'Calls',
             nameTextStyle: {color: muted},
             axisLabel: {color: muted, fontSize: 11},
             axisLine: {show: false},
@@ -309,14 +309,14 @@
         },
         series: [
           {
-            name: 'Çağrı Sayısı',
+            name: 'Call Count',
             type: 'bar',
             data: counts,
             barMaxWidth: 18,
             itemStyle: {color: '#ff6100', borderRadius: [0, 5, 5, 0]}
           },
           {
-            name: 'p95 Gecikme (ms)',
+            name: 'p95 Latency (ms)',
             type: 'line',
             xAxisIndex: 1,
             data: p95s,

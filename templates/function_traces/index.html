@@ -1,0 +1,201 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Function Traces{% endblock %}
+
+{% block content %}
+<header class="page-header" style="margin-bottom: 24px;">
+  <div class="page-title">
+    <h1>Function Traces</h1>
+    <p class="muted">Detailed telemetry and performance metrics for all internal MCP function executions.</p>
+  </div>
+</header>
+
+<!-- Filters Bar -->
+<div class="card" style="padding: 16px 24px; margin-bottom: 24px; background: #ffffff;">
+  <form method="get" style="display: flex; gap: 16px; align-items: flex-end;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+      <label for="q" style="font-size: 13px; font-weight: 500; color: #344054;">Search Function Name</label>
+      <input type="text" id="q" name="q" value="{{ q }}" placeholder="e.g. get_timezone" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif;">
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+      <label for="status" style="font-size: 13px; font-weight: 500; color: #344054;">Status</label>
+      <select id="status" name="status" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
+        <option value="">All Statuses</option>
+        <option value="ok" {% if status_filter == 'ok' %}selected{% endif %}>Success (OK)</option>
+        <option value="error" {% if status_filter == 'error' %}selected{% endif %}>Failed (Error)</option>
+      </select>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+      <label for="model" style="font-size: 13px; font-weight: 500; color: #344054;">AI Model</label>
+      <select id="model" name="model" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
+        <option value="">All Models</option>
+        {% for m in all_models %}
+        <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="button button-primary" style="padding: 8px 16px;">Apply Filters</button>
+    <a href="{% url 'function-traces' %}" class="button button-secondary" style="padding: 8px 16px; text-decoration: none;">Clear</a>
+  </form>
+</div>
+
+<!-- KPI Stats Grid -->
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px;">
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Calls</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_calls }}</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Error Rate</h3>
+    <div style="font-size: 32px; font-weight: 700; {% if error_rate > 5 %}color: #b42318;{% else %}color: #027a48;{% endif %}">{{ error_rate|floatformat:1 }}%</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Avg Duration</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ avg_duration|floatformat:2 }}ms</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Execution Time</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_duration|floatformat:2 }}ms</div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 32px;">
+  <!-- Function Aggregates -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Function Aggregates</h2>
+    </div>
+    <table class="table" style="width: 100%;">
+      <thead>
+        <tr>
+          <th>Function Name</th>
+          <th style="text-align: right;">Calls</th>
+          <th style="text-align: right;">Errors</th>
+          <th style="text-align: right;">Avg Time</th>
+          <th style="text-align: right;">Total Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for stat in stats %}
+        <tr>
+          <td style="font-weight: 600; color: #344054;">
+            <span class="badge" style="background: #f2f4f7; color: #344054;">{{ stat.name }}</span>
+          </td>
+          <td style="text-align: right; font-weight: 500;">{{ stat.count }}</td>
+          <td style="text-align: right;">
+            {% if stat.error_count > 0 %}
+            <span class="badge" style="background: #fef3f2; color: #b42318;">{{ stat.error_count }}</span>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right; color: #667085;">{{ stat.avg_duration_ms|floatformat:1 }}ms</td>
+          <td style="text-align: right; color: #667085;">{{ stat.total_duration_ms|floatformat:1 }}ms</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" style="text-align: center; padding: 24px; color: #667085;">No traces found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Model Breakdown -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Model Breakdown</h2>
+    </div>
+    <table class="table" style="width: 100%;">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th style="text-align: right;">Calls</th>
+          <th style="text-align: right;">Avg Time</th>
+          <th style="text-align: right;">Errors</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in model_stats %}
+        <tr>
+          <td style="font-weight: 600; color: #344054;">
+            {{ m.display }}
+          </td>
+          <td style="text-align: right; font-weight: 500;">{{ m.count }}</td>
+          <td style="text-align: right; color: #667085;">{{ m.avg_duration_ms|floatformat:2 }}ms</td>
+          <td style="text-align: right;">
+            {% if m.error_count > 0 %}
+            <span class="badge" style="background: #fef3f2; color: #b42318;">{{ m.error_count }}</span>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" style="text-align: center; padding: 24px; color: #667085;">No model data found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">Recent Function Traces (Max 200)</h2>
+  </div>
+  <table class="table" style="width: 100%;">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Function Name</th>
+        <th>Model</th>
+        <th style="text-align: right;">Duration</th>
+        <th>Timestamp</th>
+        <th>Payload Snippet</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for call in recent_calls %}
+      <tr>
+        <td>
+          {% if call.status == 'ok' %}
+          <span class="badge" style="background: #ecfdf3; color: #027a48; display: inline-flex; align-items: center; gap: 4px;">
+            <span style="width: 6px; height: 6px; background: #12b76a; border-radius: 50%; display: inline-block;"></span> OK
+          </span>
+          {% else %}
+          <span class="badge" style="background: #fef3f2; color: #b42318; display: inline-flex; align-items: center; gap: 4px;">
+            <span style="width: 6px; height: 6px; background: #f04438; border-radius: 50%; display: inline-block;"></span> {{ call.status|upper }}
+          </span>
+          {% endif %}
+        </td>
+        <td style="font-weight: 600;">
+          {% if call.name in 'search_workflow_templates,build_workflow_bulk' %}
+          <span class="badge" style="background: #eff8ff; color: #175cd3; font-family: 'IBM Plex Mono', monospace;">{{ call.name }}</span>
+          {% else %}
+          <span class="badge" style="background: #f2f4f7; color: #344054; font-family: 'IBM Plex Mono', monospace;">{{ call.name }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if call.session %}
+            <span style="font-size: 13px; font-weight: 500; color: #475467;">{{ call.session.platform_display }}</span>
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td style="text-align: right; color: #667085;">{{ call.duration_ms|floatformat:2 }}ms</td>
+        <td class="muted" style="white-space: nowrap;">{{ call.started_at|date:"Y-m-d H:i:s" }}</td>
+        <td>
+          {% if call.tool_call and call.tool_call.arguments %}
+          <div style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #f9fafb; padding: 4px 8px; border-radius: 4px; border: 1px solid #eaecf0; color: #475467;">
+            {{ call.tool_call.arguments }}
+          </div>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align: center; padding: 48px; color: #667085;">No traces match the selected filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

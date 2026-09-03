@@ -19,7 +19,7 @@
             type="text"
             name="q"
             value="{{ tool_data.active_filters.q|default:'' }}"
-            placeholder="JSON, Workflow ID, Parametre veya Çıktı ara..."
+            placeholder="Search JSON, Workflow ID, Parameter, or Output..."
             class="filter-input-search"
             autocomplete="off"
           />
@@ -30,7 +30,7 @@
             hx-get="{% url 'tool-detail-modal' tool_data.meta.name %}?target=invocations_list{% if active_time_range %}&range={{ active_time_range }}{% endif %}"
             hx-target="#invocations-list-container"
             hx-swap="outerHTML"
-            title="Aramayı Temizle"
+            title="Clear Search"
           >
             ✕
           </button>
@@ -39,11 +39,11 @@
 
         <!-- Status Filter Select -->
         <div class="filter-select-group">
-          <label class="filter-label">Durum:</label>
+          <label class="filter-label">Status:</label>
           <select name="status" class="filter-select">
-            <option value="all" {% if tool_data.active_filters.status == 'all' %}selected{% endif %}>Tümü (Hepsi)</option>
-            <option value="ok" {% if tool_data.active_filters.status == 'ok' %}selected{% endif %}>✓ Başarılı ({{ tool_data.success_count }})</option>
-            <option value="error" {% if tool_data.active_filters.status == 'error' %}selected{% endif %}>✗ Hatalı ({{ tool_data.error_count }})</option>
+            <option value="all" {% if tool_data.active_filters.status == 'all' %}selected{% endif %}>All</option>
+            <option value="ok" {% if tool_data.active_filters.status == 'ok' %}selected{% endif %}>✓ Success ({{ tool_data.success_count }})</option>
+            <option value="error" {% if tool_data.active_filters.status == 'error' %}selected{% endif %}>✗ Error ({{ tool_data.error_count }})</option>
           </select>
         </div>
 
@@ -51,7 +51,7 @@
         <div class="filter-select-group">
           <label class="filter-label">Platform:</label>
           <select name="platform" class="filter-select">
-            <option value="all" {% if tool_data.active_filters.platform == 'all' %}selected{% endif %}>Tüm Platformlar</option>
+            <option value="all" {% if tool_data.active_filters.platform == 'all' %}selected{% endif %}>All Platforms</option>
             <option value="claude" {% if tool_data.active_filters.platform == 'claude' %}selected{% endif %}>🟣 Claude</option>
             <option value="gpt" {% if tool_data.active_filters.platform == 'gpt' %}selected{% endif %}>🟢 GPT</option>
             <option value="gemini" {% if tool_data.active_filters.platform == 'gemini' %}selected{% endif %}>🔵 Gemini</option>
@@ -61,13 +61,13 @@
 
         <!-- Latency / Speed Filter Select -->
         <div class="filter-select-group">
-          <label class="filter-label">Gecikme:</label>
+          <label class="filter-label">Latency:</label>
           <select name="speed" class="filter-select">
-            <option value="all" {% if tool_data.active_filters.speed == 'all' %}selected{% endif %}>Tüm Hızlar</option>
-            <option value="fast" {% if tool_data.active_filters.speed == 'fast' %}selected{% endif %}>🟢 Hızlı (&lt; 1s)</option>
+            <option value="all" {% if tool_data.active_filters.speed == 'all' %}selected{% endif %}>All Speeds</option>
+            <option value="fast" {% if tool_data.active_filters.speed == 'fast' %}selected{% endif %}>🟢 Fast (&lt; 1s)</option>
             <option value="normal" {% if tool_data.active_filters.speed == 'normal' %}selected{% endif %}>🔵 Normal (1s - 5s)</option>
-            <option value="slow" {% if tool_data.active_filters.speed == 'slow' %}selected{% endif %}>🟠 Ağır (5s - 15s)</option>
-            <option value="critical" {% if tool_data.active_filters.speed == 'critical' %}selected{% endif %}>🔴 Kritik (&gt; 15s)</option>
+            <option value="slow" {% if tool_data.active_filters.speed == 'slow' %}selected{% endif %}>🟠 Slow (5s - 15s)</option>
+            <option value="critical" {% if tool_data.active_filters.speed == 'critical' %}selected{% endif %}>🔴 Critical (&gt; 15s)</option>
           </select>
         </div>
       </div>
@@ -75,21 +75,21 @@
       <!-- Active Filter Chips & Match Count -->
       <div class="filter-status-bar">
         <div class="filter-count-badge">
-          <span class="count-num"><strong>{{ tool_data.filtered_calls_count }}</strong> / {{ tool_data.total_calls }} çağrı eşleşti</span>
+          <span class="count-num"><strong>{{ tool_data.filtered_calls_count }}</strong> / {{ tool_data.total_calls }} matched calls</span>
         </div>
         {% if tool_data.active_filters.q or tool_data.active_filters.status != 'all' or tool_data.active_filters.platform != 'all' or tool_data.active_filters.speed != 'all' %}
         <div class="active-chips-wrap">
           {% if tool_data.active_filters.q %}
-          <span class="active-chip">Arama: "{{ tool_data.active_filters.q }}"</span>
+          <span class="active-chip">Search: "{{ tool_data.active_filters.q }}"</span>
           {% endif %}
           {% if tool_data.active_filters.status != 'all' %}
-          <span class="active-chip">Durum: {{ tool_data.active_filters.status }}</span>
+          <span class="active-chip">Status: {{ tool_data.active_filters.status }}</span>
           {% endif %}
           {% if tool_data.active_filters.platform != 'all' %}
           <span class="active-chip">Platform: {{ tool_data.active_filters.platform }}</span>
           {% endif %}
           {% if tool_data.active_filters.speed != 'all' %}
-          <span class="active-chip">Hız: {{ tool_data.active_filters.speed }}</span>
+          <span class="active-chip">Speed: {{ tool_data.active_filters.speed }}</span>
           {% endif %}
           <a
             href="javascript:void(0)"
@@ -98,7 +98,7 @@
             hx-target="#invocations-list-container"
             hx-swap="outerHTML"
           >
-            Filtreleri Temizle ✕
+            Clear Filters ✕
           </a>
         </div>
         {% endif %}
@@ -122,7 +122,7 @@
                 href="{% url 'session-detail' inv.session_id %}"
                 class="session-link mono font-11"
                 onclick="event.stopPropagation();"
-                title="Oturumu aç: {{ inv.session.external_session_id }}"
+                title="Open session: {{ inv.session.external_session_id }}"
               >
                 🔗 {{ inv.session_display }}
               </a>
@@ -134,7 +134,7 @@
               {% endif %}
             </div>
             <div class="inv-args-preview font-12" title="{{ inv.arguments_summary }}">
-              <strong>Girdi:</strong> {{ inv.arguments_summary }}
+              <strong>Input:</strong> {{ inv.arguments_summary }}
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@
             ⏱️ {{ inv.duration_ms|floatformat:1 }} ms
           </span>
           {% if inv.http_count > 0 %}
-          <span class="badge badge-subtle font-10" title="{{ inv.http_count }} HTTP API çağrısı">
+          <span class="badge badge-subtle font-10" title="{{ inv.http_count }} HTTP API calls">
             🌐 {{ inv.http_count }} HTTP
           </span>
           {% endif %}
@@ -155,7 +155,7 @@
       <div class="inv-details-body">
         <!-- Result Overview Banner -->
         <div class="inv-result-banner {% if inv.is_error %}result-error{% else %}result-success{% endif %}">
-          <strong>{% if inv.is_error %}Hata / Uyarı Çıktısı:{% else %}Başarılı Yanıt Özeti:{% endif %}</strong>
+          <strong>{% if inv.is_error %}Error / Warning Output:{% else %}Success Response Summary:{% endif %}</strong>
           <span>{{ inv.result_summary }}</span>
           <span class="inv-bytes muted font-10">Payload: {{ inv.result_bytes_formatted }}</span>
         </div>
@@ -163,7 +163,7 @@
         <!-- Child HTTP API Calls if any -->
         {% if inv.http_calls %}
         <div class="inv-http-traces">
-          <span class="font-10 uppercase tracking muted font-bold">Jotform Cloud API İstekleri ({{ inv.http_calls|length }} adet):</span>
+          <span class="font-10 uppercase tracking muted font-bold">Jotform Cloud API Requests ({{ inv.http_calls|length }} items):</span>
           <div class="http-traces-list">
             {% for http in inv.http_calls %}
             <div class="http-trace-item">
@@ -184,7 +184,7 @@
           <!-- Input Arguments JSON -->
           <div class="json-shell-box">
             <div class="json-toolbar">
-              <span class="json-title">📥 Girdi Parametreleri (Arguments JSON)</span>
+              <span class="json-title">📥 Input Parameters (Arguments JSON)</span>
               <div class="json-actions">
                 <button type="button" class="json-btn" data-wrap-json title="Toggle Wrap">Wrap</button>
                 <button type="button" class="json-btn" data-expand-json title="Expand Height">Expand</button>
@@ -197,7 +197,7 @@
           <!-- Output Result JSON -->
           <div class="json-shell-box">
             <div class="json-toolbar">
-              <span class="json-title">📤 Dönen Çıktı (Result JSON)</span>
+              <span class="json-title">📤 Returned Output (Result JSON)</span>
               <div class="json-actions">
                 <button type="button" class="json-btn" data-wrap-json title="Toggle Wrap">Wrap</button>
                 <button type="button" class="json-btn" data-expand-json title="Expand Height">Expand</button>
@@ -211,7 +211,7 @@
     </details>
     {% empty %}
     <div class="empty-invocations">
-      <p class="muted font-13">Filtre kriterlerine uygun çağrı kaydı bulunamadı.</p>
+      <p class="muted font-13">No invocation records matched the filter criteria.</p>
     </div>
     {% endfor %}
   </div>
@@ -227,14 +227,14 @@
       hx-target="#invocations-list-container"
       hx-swap="outerHTML"
     >
-      ← Önceki
+      ← Previous
     </button>
     {% else %}
-    <button type="button" class="button secondary small" disabled>← Önceki</button>
+    <button type="button" class="button secondary small" disabled>← Previous</button>
     {% endif %}
 
     <span class="pagination-info mono font-12">
-      Sayfa {{ tool_data.page_obj.number }} / {{ tool_data.page_obj.paginator.num_pages }} (Toplam {{ tool_data.filtered_calls_count }} çağrı)
+      Page {{ tool_data.page_obj.number }} / {{ tool_data.page_obj.paginator.num_pages }} (Total {{ tool_data.filtered_calls_count }} calls)
     </span>
 
     {% if tool_data.page_obj.has_next %}
@@ -245,10 +245,10 @@
       hx-target="#invocations-list-container"
       hx-swap="outerHTML"
     >
-      Sonraki →
+      Next →
     </button>
     {% else %}
-    <button type="button" class="button secondary small" disabled>Sonraki →</button>
+    <button type="button" class="button secondary small" disabled>Next →</button>
     {% endif %}
   </div>
   {% endif %}

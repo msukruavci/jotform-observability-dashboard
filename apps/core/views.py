@@ -10,7 +10,7 @@ import google.generativeai as genai
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Avg, Count, F, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -187,15 +187,30 @@ class SessionDetailView(DetailView):
                     raw_events_by_request.setdefault(request_id, []).append(event.payload)
         if session.turns.exists():
             operations_by_turn = {}
+            children_by_parent = {}
+            top_level_spans = []
+            
             for span in spans:
+                if span.parent_id:
+                    children_by_parent.setdefault(span.parent_id, []).append(span)
+                else:
+                    top_level_spans.append(span)
+                    
+            def build_op_card(s):
+                child_spans = children_by_parent.get(s.id, [])
+                child_cards = [build_op_card(c) for c in child_spans]
+                return operation_card(s, raw_events_by_request.get(s.request_id), child_cards)
+
+            for span in top_level_spans:
                 if span.turn_id:
-                    operations_by_turn.setdefault(span.turn_id, []).append(operation_card(span, raw_events_by_request.get(span.request_id)))
+                    operations_by_turn.setdefault(span.turn_id, []).append(build_op_card(span))
+                    
             context["conversation"] = [
                 {"turn": turn, "operations": operations_by_turn.get(turn.id, [])}
                 for turn in session.turns.all()
             ]
             all_unassigned = [
-                operation_card(span, raw_events_by_request.get(span.request_id)) for span in spans if not span.turn_id
+                build_op_card(span) for span in top_level_spans if not span.turn_id
             ]
         else:
             context["conversation"] = reconstruct_synthetic_turns(spans, raw_events_by_request)
@@ -869,3 +884,306 @@ PAYLOAD:
             html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Analiz Hatası ({selected_model}):</strong> {e}</div>"
 
         return HttpResponse(html_content)
+class FeatureRequestsView(TemplateView):
+    template_name = "feature_requests/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            score_threshold = float(self.request.GET.get("threshold", "0.68"))
+        except ValueError:
+            score_threshold = 0.68
+
+        try:
+            cluster_threshold = float(self.request.GET.get("cluster_threshold", "0.50"))
+        except ValueError:
+            cluster_threshold = 0.50
+
+        tool_calls = ToolCall.objects.filter(tool_name="search_workflow_templates").select_related("span")
+        
+        gaps = []
+        for tc in tool_calls:
+            args = tc.arguments or {}
+            query = args.get("query", "")
+            if not query:
+                continue
+                
+            res = tc.result or {}
+            score = 1.0
+            structured = res.get("structured_content")
+            if structured and isinstance(structured, dict):
+                templates = structured.get("templates", [])
+                if templates and isinstance(templates, list):
+                    score = templates[0].get("score", 1.0)
+            
+            if score < score_threshold:
+                gaps.append({
+                    "query": query,
+                    "score": score,
+                    "timestamp": tc.span.started_at,
+                    "session_id": tc.span.session.id if tc.span and tc.span.session else None,
+                })
+
+        unique_queries = list(set(gap["query"] for gap in gaps))
+        embeddings_map = {}
+        try:
+            from fastembed import TextEmbedding
+            model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            vectors = list(model.embed(unique_queries))
+            for i, q in enumerate(unique_queries):
+                embeddings_map[q] = vectors[i]
+        except Exception:
+            pass
+
+        def get_words(s):
+            return set(w.lower() for w in str(s).split() if len(w) > 2)
+
+        def similarity(a, b):
+            sa, sb = get_words(a), get_words(b)
+            if not sa and not sb: 
+                j_sim = 1.0
+            else:
+                intersection = len(sa.intersection(sb))
+                union = len(sa) + len(sb) - intersection
+                j_sim = intersection / union if union else 0.0
+            
+            e_sim = 0.0
+            if a in embeddings_map and b in embeddings_map:
+                vec_a = embeddings_map[a]
+                vec_b = embeddings_map[b]
+                dot_product = sum(x * y for x, y in zip(vec_a, vec_b))
+                norm_a = sum(x*x for x in vec_a) ** 0.5
+                norm_b = sum(x*x for x in vec_b) ** 0.5
+                if norm_a and norm_b:
+                    e_sim = dot_product / (norm_a * norm_b)
+            else:
+                return j_sim, j_sim, 0.0
+
+            return (j_sim * 0.3) + (e_sim * 0.7), j_sim, e_sim
+
+        clusters = []
+        for gap in gaps:
+            matched = False
+            for cluster in clusters:
+                sim_score, j_sim, e_sim = similarity(cluster["base_query"], gap["query"])
+                if sim_score >= cluster_threshold:
+                    # We create a copy of gap to avoid modifying the original if we need it, but here it's fine.
+                    gap_with_sim = gap.copy()
+                    gap_with_sim["hybrid_sim"] = sim_score
+                    gap_with_sim["j_sim"] = j_sim
+                    gap_with_sim["e_sim"] = e_sim
+                    cluster["items"].append(gap_with_sim)
+                    matched = True
+                    break
+            if not matched:
+                gap_with_sim = gap.copy()
+                gap_with_sim["hybrid_sim"] = 1.0
+                gap_with_sim["j_sim"] = 1.0
+                gap_with_sim["e_sim"] = 1.0
+                clusters.append({
+                    "base_query": gap["query"],
+                    "items": [gap_with_sim]
+                })
+
+        clusters.sort(key=lambda c: len(c["items"]), reverse=True)
+
+        # Calculate new statistics
+        total_clusters = len(clusters)
+        avg_cluster_size = len(gaps) / total_clusters if total_clusters > 0 else 0
+        total_score = sum(g["score"] for g in gaps)
+        avg_score = total_score / len(gaps) if gaps else 0.0
+        unique_sessions = len(set(g["session_id"] for g in gaps if g["session_id"]))
+
+        # Add cluster-level stats
+        for cluster in clusters:
+            cluster_scores = [item["score"] for item in cluster["items"]]
+            cluster["avg_score"] = sum(cluster_scores) / len(cluster_scores) if cluster_scores else 0
+            cluster["unique_sessions"] = len(set(item["session_id"] for item in cluster["items"] if item["session_id"]))
+
+        # Prepare chart data for ECharts (Top 10 biggest clusters)
+        chart_data = {
+            "categories": [c["base_query"][:30] + ("..." if len(c["base_query"]) > 30 else "") for c in clusters[:10]][::-1],
+            "values": [len(c["items"]) for c in clusters[:10]][::-1]
+        }
+        
+        import json
+
+        context.update({
+            "active_nav": "feature-requests",
+            "score_threshold": score_threshold,
+            "cluster_threshold": cluster_threshold,
+            "clusters": clusters,
+            "total_gaps": len(gaps),
+            "total_clusters": total_clusters,
+            "avg_cluster_size": avg_cluster_size,
+            "avg_score": avg_score,
+            "unique_sessions": unique_sessions,
+            "chart_data_json": json.dumps(chart_data),
+        })
+        return context
+
+
+class FunctionTracesView(TemplateView):
+    template_name = "function_traces/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        q = self.request.GET.get("q", "").strip()
+        status_filter = self.request.GET.get("status", "")
+        model_filter = self.request.GET.get("model", "")
+        
+        from django.db.models import Case, When, Value, CharField
+        
+        platform_case = Case(
+            When(Q(session__provider__icontains="test") | Q(session__provider__icontains="ci") | Q(session__model__icontains="test") | Q(session__model__icontains="pytest"), then=Value("🧪 Tests / CI")),
+            When(Q(session__provider__icontains="anthropic") | Q(session__provider__icontains="claude") | Q(session__model__icontains="claude"), then=Value("Claude")),
+            When(Q(session__provider__icontains="gemini") | Q(session__provider__icontains="google") | Q(session__model__icontains="gemini"), then=Value("Gemini")),
+            When(Q(session__provider__icontains="openai") | Q(session__provider__icontains="chatgpt") | Q(session__provider__icontains="gpt") | Q(session__model__icontains="gpt") | Q(session__model__icontains="o1") | Q(session__model__icontains="o3"), then=Value("ChatGPT / GPT")),
+            default=Value("MCP Direct"),
+            output_field=CharField()
+        )
+        
+        spans = Span.objects.filter(kind="tool").annotate(platform_display=platform_case)
+        
+        if q:
+            spans = spans.filter(name__icontains=q)
+        if status_filter:
+            spans = spans.filter(status=status_filter)
+        if model_filter:
+            spans = spans.filter(platform_display=model_filter)
+            
+        total_calls = spans.count()
+        total_errors = spans.filter(status="error").count()
+        error_rate = (total_errors / total_calls * 100) if total_calls > 0 else 0
+        aggs = spans.aggregate(Avg("duration_ms"), Sum("duration_ms"))
+        avg_duration = aggs["duration_ms__avg"] or 0
+        total_duration = aggs["duration_ms__sum"] or 0
+        
+        stats = spans.values("name").annotate(
+            count=Count("id"),
+            total_duration_ms=Sum("duration_ms"),
+            avg_duration_ms=Avg("duration_ms"),
+            error_count=Count("id", filter=Q(status="error"))
+        ).order_by("-count")
+
+        model_stats = spans.values("platform_display").annotate(
+            count=Count("id"),
+            avg_duration_ms=Avg("duration_ms"),
+            error_count=Count("id", filter=Q(status="error"))
+        ).order_by("-count")
+        
+        for m in model_stats:
+            m["display"] = m["platform_display"]
+            
+        all_models = ["Claude", "Gemini", "ChatGPT / GPT", "MCP Direct", "🧪 Tests / CI"]
+
+        recent_calls = spans.select_related("session", "tool_call").order_by("-started_at")[:200]
+        
+        context.update({
+            "active_nav": "function-traces",
+            "stats": stats,
+            "model_stats": model_stats,
+            "recent_calls": recent_calls,
+            "total_calls": total_calls,
+            "error_rate": error_rate,
+            "avg_duration": avg_duration,
+            "total_duration": total_duration,
+            "q": q,
+            "status_filter": status_filter,
+            "model_filter": model_filter,
+            "all_models": all_models,
+        })
+        return context
+
+
+from collections import Counter
+from datetime import timedelta
+from django.utils import timezone
+
+class GeneratedElementsView(TemplateView):
+    template_name = "generated_elements/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        time_filter = self.request.GET.get("time", "all")
+        model_filter = self.request.GET.get("model", "")
+        
+        from django.db.models import Case, When, Value, CharField, Q
+        
+        platform_case = Case(
+            When(Q(span__session__provider__icontains="test") | Q(span__session__provider__icontains="ci") | Q(span__session__model__icontains="test") | Q(span__session__model__icontains="pytest"), then=Value("🧪 Tests / CI")),
+            When(Q(span__session__provider__icontains="anthropic") | Q(span__session__provider__icontains="claude") | Q(span__session__model__icontains="claude"), then=Value("Claude")),
+            When(Q(span__session__provider__icontains="gemini") | Q(span__session__provider__icontains="google") | Q(span__session__model__icontains="gemini"), then=Value("Gemini")),
+            When(Q(span__session__provider__icontains="openai") | Q(span__session__provider__icontains="chatgpt") | Q(span__session__provider__icontains="gpt") | Q(span__session__model__icontains="gpt") | Q(span__session__model__icontains="o1") | Q(span__session__model__icontains="o3"), then=Value("ChatGPT / GPT")),
+            default=Value("MCP Direct"),
+            output_field=CharField()
+        )
+        
+        tool_calls = ToolCall.objects.filter(tool_name="build_workflow_bulk").select_related("span__session").annotate(platform_display=platform_case)
+        
+        if time_filter == "24h":
+            tool_calls = tool_calls.filter(span__started_at__gte=timezone.now() - timedelta(hours=24))
+        elif time_filter == "7d":
+            tool_calls = tool_calls.filter(span__started_at__gte=timezone.now() - timedelta(days=7))
+        elif time_filter == "30d":
+            tool_calls = tool_calls.filter(span__started_at__gte=timezone.now() - timedelta(days=30))
+            
+        if model_filter:
+            tool_calls = tool_calls.filter(platform_display=model_filter)
+            
+        tool_calls = tool_calls.order_by("-span__started_at")
+        
+        type_counts = Counter()
+        recent_workflows = []
+        
+        for tc in tool_calls:
+            args = tc.arguments or {}
+            steps = args.get("steps", [])
+            intent = args.get("intent", "No intent provided")
+            reason = args.get("reason", "No reason provided")
+            
+            workflow_types = []
+            if isinstance(steps, list):
+                for step in steps:
+                    if isinstance(step, dict) and "type" in step:
+                        step_type = step["type"]
+                        type_counts[step_type] += 1
+                        workflow_types.append(step_type)
+            
+            if workflow_types and len(recent_workflows) < 100:
+                platform = tc.span.session.platform_display if tc.span and tc.span.session else "Unknown"
+                model_name = tc.span.session.model if tc.span and tc.span.session else ""
+                if "gpt-4o" in model_name.lower(): platform = "GPT-4o"
+                elif "claude-3-5" in model_name.lower(): platform = "Claude 3.5 Sonnet"
+                
+                recent_workflows.append({
+                    "timestamp": tc.span.started_at if tc.span else None,
+                    "platform": platform,
+                    "intent": intent,
+                    "reason": reason,
+                    "step_count": len(workflow_types),
+                    "types": workflow_types,
+                })
+
+        total_elements = sum(type_counts.values())
+        chart_data = [{"name": name, "value": count} for name, count in type_counts.items()]
+        chart_data.sort(key=lambda x: x["value"], reverse=True)
+        
+        # Unique models for the dropdown
+        all_models = ["Claude", "Gemini", "ChatGPT / GPT", "MCP Direct", "🧪 Tests / CI"]
+        
+        import json
+        
+        context.update({
+            "active_nav": "generated-elements",
+            "type_counts": chart_data,
+            "total_elements": total_elements,
+            "recent_workflows": recent_workflows,
+            "chart_data_json": json.dumps(chart_data),
+            "time_filter": time_filter,
+            "model_filter": model_filter,
+            "all_models": all_models,
+        })
+        return context

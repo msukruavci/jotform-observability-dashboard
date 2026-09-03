@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Catalog, Invocations &amp; Semantic Cross-Analysis</p>
     <h1>Workflow Template Intelligence</h1>
-    <p>MCP oturumlarında yapılan şablon aramaları, vektör benzerlik matrisi (27.028 çift), 0.05 uniqueness aralıkları ve global 300+ şablon kataloğu.</p>
+    <p>Template searches in MCP sessions, vector similarity matrix (27,028 pairs), 0.05 uniqueness buckets, and global 300+ template catalog.</p>
   </div>
 </div>
 
@@ -18,7 +18,7 @@
     data-tab="invocations"
     onclick="switchTab('invocations')"
   >
-    <span>🔍 MCP Oturum &amp; Sorgu Analizi</span>
+    <span>🔍 MCP Session &amp; Query Analysis</span>
     <span class="tab-badge">{{ inv_stats.total_invocations|default:0 }}</span>
   </button>
   <button
@@ -28,8 +28,8 @@
     data-tab="analysis"
     onclick="switchTab('analysis')"
   >
-    <span>📊 Çapraz Benzerlik &amp; Uniqueness Analizi</span>
-    <span class="tab-badge">{{ analysis_data.total_pairs|default:27028 }} çift</span>
+    <span>📊 Cross-Similarity &amp; Uniqueness Analysis</span>
+    <span class="tab-badge">{{ analysis_data.total_pairs|default:27028 }} pairs</span>
   </button>
   <button
     type="button"
@@ -38,7 +38,7 @@
     data-tab="catalog"
     onclick="switchTab('catalog')"
   >
-    <span>🌐 Global Şablon Kataloğu</span>
+    <span>🌐 Global Template Catalog</span>
     <span class="tab-badge">{{ total_templates|default:0 }}</span>
   </button>
 </nav>
@@ -48,24 +48,24 @@
   <!-- Invocations KPI Cards -->
   <div class="metric-grid">
     <article class="metric-card accent">
-      <p>Toplam Şablon Çağrısı <span>🔍</span></p>
+      <p>Total Template Invocations <span>🔍</span></p>
       <strong>{{ inv_stats.total_invocations|default:0 }}</strong>
-      <small>{{ inv_stats.total_searches|default:0 }} arama sorgusu, {{ inv_stats.total_inspections|default:0 }} blueprint inceleme</small>
+      <small>{{ inv_stats.total_searches|default:0 }} search queries, {{ inv_stats.total_inspections|default:0 }} blueprint inspections</small>
     </article>
     <article class="metric-card">
-      <p>Önerilen Tekil Şablonlar <span class="positive">✦</span></p>
+      <p>Unique Retrieved Templates <span class="positive">✦</span></p>
       <strong>{{ inv_stats.unique_retrieved_count|default:0 }}</strong>
-      <small>oturumlarımızda eşleşen benzersiz şablon</small>
+      <small>unique templates matched in our sessions</small>
     </article>
     <article class="metric-card">
-      <p>Ortalama RAG Eşleşme Skoru <span>⌁</span></p>
+      <p>Average RAG Match Score <span>⌁</span></p>
       <strong>{{ inv_stats.avg_similarity_score|default:"0.0" }}</strong>
-      <small>vektör kosinüs benzerlik ortalaması</small>
+      <small>vector cosine similarity average</small>
     </article>
     <article class="metric-card">
-      <p>Detay İnceleme (get_template) <span>🔬</span></p>
+      <p>Detailed Inspection (get_template) <span>🔬</span></p>
       <strong>{{ inv_stats.total_inspections|default:0 }}</strong>
-      <small>derinlemesine blueprint analizi</small>
+      <small>in-depth blueprint analysis</small>
     </article>
   </div>
 
@@ -74,10 +74,10 @@
   <section class="top-retrieved-panel">
     <div class="panel-head" style="margin-bottom: 4px; padding: 0;">
       <div>
-        <p class="eyebrow">En Çok Önerilen Şablonlar</p>
-        <h3 style="margin: 0; font-size: 15px; color: var(--ink);">Bizim MCP Oturumlarında En Çok Çekilen Şablonlar</h3>
+        <p class="eyebrow">Top Retrieved Templates</p>
+        <h3 style="margin: 0; font-size: 15px; color: var(--ink);">Most retrieved templates in our MCP sessions</h3>
       </div>
-      <span class="muted" style="font-size: 12px;">Frekans Analizi</span>
+      <span class="muted" style="font-size: 12px;">Frequency Analysis</span>
     </div>
     <div class="top-retrieved-grid">
       {% for item in inv_stats.top_retrieved %}
@@ -87,7 +87,7 @@
             <span class="mono muted" style="font-size: 11px;">#{{ item.id }} · {{ item.category }}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="top-retrieved-count" title="Bizim oturumlarda {{ item.count }} kez önerildi">{{ item.count }}x</span>
+            <span class="top-retrieved-count" title="Suggested {{ item.count }} times in our sessions">{{ item.count }}x</span>
             <button
               class="button secondary tiny"
               type="button"
@@ -109,10 +109,10 @@
   <article class="panel flush">
     <div class="panel-head padded">
       <div>
-        <p class="eyebrow">Sorgu &amp; Arama Geçmişi</p>
-        <h2>Oturumlarda Çekilen Şablonlar ve Yapılan Doğal Dil Aramaları</h2>
+        <p class="eyebrow">Query &amp; Search History</p>
+        <h2>Templates retrieved and natural language searches performed in sessions</h2>
       </div>
-      <span class="muted">{{ invocations_page.total_items }} kayıt</span>
+      <span class="muted">{{ invocations_page.total_items }} records</span>
     </div>
 
     <!-- Filter Toolbar for Invocations -->
@@ -123,7 +123,7 @@
           <input
             type="text"
             name="inv_q"
-            placeholder="Sorgu metni, Session ID, şablon başlığı veya ID ile ara..."
+            placeholder="Search by query text, Session ID, template title, or ID..."
             value="{{ inv_q }}"
             hx-get="{% url 'template-intelligence' %}?target=invocations_table&tab=invocations"
             hx-trigger="keyup changed delay:300ms"
@@ -144,9 +144,9 @@
           hx-include="[name='inv_q']"
           class="filter-select"
         >
-          <option value="" {% if not inv_tool %}selected{% endif %}>Tüm İşlemler (Arama + İnceleme)</option>
-          <option value="search" {% if inv_tool == 'search' %}selected{% endif %}>Sadece Şablon Aramaları (search_workflow_templates)</option>
-          <option value="inspection" {% if inv_tool == 'inspection' %}selected{% endif %}>Sadece Detay İncelemeleri (get_workflow_template)</option>
+          <option value="" {% if not inv_tool %}selected{% endif %}>All Operations (Search + Inspection)</option>
+          <option value="search" {% if inv_tool == 'search' %}selected{% endif %}>Only Template Searches (search_workflow_templates)</option>
+          <option value="inspection" {% if inv_tool == 'inspection' %}selected{% endif %}>Only Detailed Inspections (get_workflow_template)</option>
         </select>
       </div>
     </div>
@@ -161,24 +161,24 @@
   <!-- Analysis Top KPI Metrics -->
   <div class="metric-grid">
     <article class="metric-card accent">
-      <p>Toplam Değerlendirilen Çift <span>🔢</span></p>
+      <p>Total Evaluated Pairs <span>🔢</span></p>
       <strong>{{ analysis_data.total_pairs|default:27028 }}</strong>
-      <small>{{ analysis_data.total_templates|default:233 }} şablonun tüm çapraz $N \times (N-1)/2$ kombinasyonu</small>
+      <small>all cross $N \times (N-1)/2$ combinations of {{ analysis_data.total_templates|default:233 }} templates</small>
     </article>
     <article class="metric-card">
-      <p>Ortalama Benzerlik (Cosine) <span>⌁</span></p>
+      <p>Average Similarity (Cosine) <span>⌁</span></p>
       <strong>{{ analysis_data.mean_similarity|default:"0.8047" }}</strong>
-      <small>medyan: {{ analysis_data.median_similarity|default:"0.8100" }} · std: {{ analysis_data.std_dev|default:"0.0489" }}</small>
+      <small>median: {{ analysis_data.median_similarity|default:"0.8100" }} · std: {{ analysis_data.std_dev|default:"0.0489" }}</small>
     </article>
     <article class="metric-card">
-      <p>En Yüksek Benzerlik (Min Uniqueness) <span>🔥</span></p>
+      <p>Highest Similarity (Min Uniqueness) <span>🔥</span></p>
       <strong>{{ analysis_data.max_similarity|default:"0.9808" }}</strong>
-      <small>en yakın iki şablon arasındaki benzerlik skoru</small>
+      <small>similarity score between the two closest templates</small>
     </article>
     <article class="metric-card">
-      <p>En Düşük Benzerlik (Max Uniqueness) <span>💎</span></p>
+      <p>Lowest Similarity (Max Uniqueness) <span>💎</span></p>
       <strong>{{ analysis_data.min_similarity|default:"0.6042" }}</strong>
-      <small>tamamen farklı iki alan arasındaki minimum skor</small>
+      <small>minimum score between two completely different domains</small>
     </article>
   </div>
 
@@ -186,10 +186,10 @@
   <article class="panel">
     <div class="panel-head padded">
       <div>
-        <p class="eyebrow">0.05 Aralık Dağılım Eğrisi</p>
-        <h2>Şablon Çiftlerinin 0.05 Kosinüs Benzerlik Aralıklarına Göre Dağılımı</h2>
+        <p class="eyebrow">0.05 Bucket Distribution Curve</p>
+        <h2>Distribution of Template Pairs by 0.05 Cosine Similarity Buckets</h2>
       </div>
-      <span class="muted mono">20 Aralık [0.00 - 1.00]</span>
+      <span class="muted mono">20 Buckets [0.00 - 1.00]</span>
     </div>
     <div id="similarity-histogram-chart" class="chart" style="height: 320px;" aria-label="Similarity distribution histogram"></div>
   </article>
@@ -200,16 +200,16 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow" style="color: var(--orange);">En Yüksek Benzerlik (Düşük Uniqueness)</p>
-          <h3 style="margin: 0; font-size: 15px;">Birbirine En Çok Benzeyen Şablon Çiftleri</h3>
+          <p class="eyebrow" style="color: var(--orange);">Highest Similarity (Low Uniqueness)</p>
+          <h3 style="margin: 0; font-size: 15px;">Most similar template pairs</h3>
         </div>
-        <span class="score-badge score-high">Skor &gt; 0.96</span>
+        <span class="score-badge score-high">Score &gt; 0.96</span>
       </div>
       <div class="pair-highlights-list" style="padding: 12px 18px; display: flex; flex-direction: column; gap: 10px;">
         {% for pair in analysis_data.most_similar_pairs %}
           <div class="matched-template-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span class="score-badge score-high mono">Skor: {{ pair.score }}</span>
+              <span class="score-badge score-high mono">Score: {{ pair.score }}</span>
               <div style="display: flex; gap: 4px;">
                 <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_a.id %}" hx-target="#modal-container" hx-swap="innerHTML">A ↗</button>
                 <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_b.id %}" hx-target="#modal-container" hx-swap="innerHTML">B ↗</button>
@@ -228,16 +228,16 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow" style="color: var(--blue);">En Yüksek Uniqueness (Farklı Alanlar)</p>
-          <h3 style="margin: 0; font-size: 15px;">Birbirinden En Çok Ayrışan Şablon Çiftleri</h3>
+          <p class="eyebrow" style="color: var(--blue);">Highest Uniqueness (Different Domains)</p>
+          <h3 style="margin: 0; font-size: 15px;">Most distinct template pairs</h3>
         </div>
-        <span class="score-badge score-low">Skor ~ 0.60</span>
+        <span class="score-badge score-low">Score ~ 0.60</span>
       </div>
       <div class="pair-highlights-list" style="padding: 12px 18px; display: flex; flex-direction: column; gap: 10px;">
         {% for pair in analysis_data.most_distinct_pairs %}
           <div class="matched-template-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span class="score-badge score-low mono">Skor: {{ pair.score }}</span>
+              <span class="score-badge score-low mono">Score: {{ pair.score }}</span>
               <div style="display: flex; gap: 4px;">
                 <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_a.id %}" hx-target="#modal-container" hx-swap="innerHTML">A ↗</button>
                 <button class="button secondary tiny" type="button" hx-get="{% url 'template-detail-modal' pair.template_b.id %}" hx-target="#modal-container" hx-swap="innerHTML">B ↗</button>
@@ -257,10 +257,10 @@
   <article class="panel flush">
     <div class="panel-head padded">
       <div>
-        <p class="eyebrow">Aralık Tarayıcısı (Bucket Explorer)</p>
-        <h2>0.05 Kosinüs Benzerlik Aralığına Göre Şablon Çiftleri</h2>
+        <p class="eyebrow">Bucket Explorer</p>
+        <h2>Template Pairs by 0.05 Cosine Similarity Bucket</h2>
       </div>
-      <span class="muted">İnteraktif Filtre</span>
+      <span class="muted">Interactive Filter</span>
     </div>
 
     <!-- 0.05 Interval Selector Buttons -->
@@ -291,24 +291,24 @@
   <!-- Top Global KPI Cards -->
   <div class="metric-grid">
     <article class="metric-card">
-      <p>Toplam Şablon Sayısı <span>⊞</span></p>
+      <p>Total Templates <span>⊞</span></p>
       <strong>{{ total_templates }}</strong>
-      <small>{{ total_categories }} farklı iş alanında indekslenmiş şablon</small>
+      <small>templates indexed across {{ total_categories }} different domains</small>
     </article>
     <article class="metric-card">
-      <p>Global Klon / Kullanım <span class="positive">⚡</span></p>
+      <p>Global Clones / Usage <span class="positive">⚡</span></p>
       <strong>{{ total_clones }}</strong>
-      <small>topluluk klonları &amp; aktif kullanım sayısı</small>
+      <small>community clones &amp; active usage count</small>
     </article>
     <article class="metric-card accent">
-      <p>Ort. Karmaşıklık Skoru <span>⌁</span></p>
+      <p>Avg. Complexity Score <span>⌁</span></p>
       <strong>{{ avg_complexity }}<em> pts</em></strong>
-      <small>ort. {{ avg_elements }} element ve karar düğümü</small>
+      <small>avg. {{ avg_elements }} elements and decision nodes</small>
     </article>
     <article class="metric-card">
-      <p>Ort. Benzersizlik Skoru <span>✦</span></p>
+      <p>Avg. Uniqueness Score <span>✦</span></p>
       <strong>{{ avg_uniqueness }}</strong>
-      <small>vektör mesafesi &amp; şablon entropisi</small>
+      <small>vector distance &amp; template entropy</small>
     </article>
   </div>
 
@@ -317,10 +317,10 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Taksonomi</p>
-          <h2>Kategoriye Göre Şablon Dağılımı</h2>
+          <p class="eyebrow">Taxonomy</p>
+          <h2>Template Distribution by Category</h2>
         </div>
-        <span class="muted">Dağılım</span>
+        <span class="muted">Distribution</span>
       </div>
       <div id="category-chart" class="chart" style="height: 300px;" aria-label="Templates by category chart"></div>
     </article>
@@ -328,8 +328,8 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Global Popülarite</p>
-          <h2>En Çok Klonlanan Şablonlar</h2>
+          <p class="eyebrow">Global Popularity</p>
+          <h2>Top Cloned Templates</h2>
         </div>
         <span class="muted">Top 10</span>
       </div>
@@ -341,8 +341,8 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Mimari Matrisi</p>
-          <h2>Karmaşıklık vs. Benzersizlik</h2>
+          <p class="eyebrow">Architecture Matrix</p>
+          <h2>Complexity vs. Uniqueness</h2>
         </div>
         <span class="muted">Quadrant</span>
       </div>
@@ -352,10 +352,10 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Akış Bileşenleri</p>
-          <h2>Adım &amp; Element Tipi Frekansı</h2>
+          <p class="eyebrow">Flow Components</p>
+          <h2>Step &amp; Element Type Frequency</h2>
         </div>
-        <span class="muted">Tüm Şablonlar</span>
+        <span class="muted">All Templates</span>
       </div>
       <div id="steptype-chart" class="chart" style="height: 300px;" aria-label="Step types frequency chart"></div>
     </article>
@@ -365,10 +365,10 @@
   <article class="panel flush">
     <div class="panel-head padded">
       <div>
-        <p class="eyebrow">Katalog Tarayıcı</p>
-        <h2>İndekslenmiş Tüm Workflow Şablonları</h2>
+        <p class="eyebrow">Catalog Explorer</p>
+        <h2>All Indexed Workflow Templates</h2>
       </div>
-      <span class="muted">{{ total_templates }} şablon</span>
+      <span class="muted">{{ total_templates }} templates</span>
     </div>
 
     <!-- Search & Filter Toolbar -->
@@ -379,7 +379,7 @@
           <input
             type="text"
             name="q"
-            placeholder="Başlık, anahtar kelime, adım tipi veya etiket ile ara..."
+            placeholder="Search by title, keyword, step type, or tag..."
             value="{{ current_q }}"
             hx-get="{% url 'template-intelligence' %}?target=table&tab=catalog"
             hx-trigger="keyup changed delay:300ms"
@@ -399,7 +399,7 @@
           hx-include="[name='q'], [name='sort']"
           class="filter-select"
         >
-          <option value="">Tüm Kategoriler ({{ total_categories }})</option>
+          <option value="">All Categories ({{ total_categories }})</option>
           {% for cat in categories_list %}
             <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>{{ cat }}</option>
           {% endfor %}
@@ -407,7 +407,7 @@
       </div>
 
       <div class="filter-group-right">
-        <label class="sort-label">Sırala:
+        <label class="sort-label">Sort:
           <select
             name="sort"
             hx-get="{% url 'template-intelligence' %}?target=table&tab=catalog"
@@ -417,12 +417,12 @@
             hx-include="[name='q'], [name='category']"
             class="filter-select"
           >
-            <option value="clones_desc" {% if current_sort == 'clones_desc' %}selected{% endif %}>En Popüler (Klon Sayısı ↓)</option>
-            <option value="complexity_desc" {% if current_sort == 'complexity_desc' %}selected{% endif %}>En Yüksek Karmaşıklık ↓</option>
-            <option value="complexity_asc" {% if current_sort == 'complexity_asc' %}selected{% endif %}>En Sade Akışlar ↑</option>
-            <option value="uniqueness_desc" {% if current_sort == 'uniqueness_desc' %}selected{% endif %}>En Benzersiz ↓</option>
-            <option value="elements_desc" {% if current_sort == 'elements_desc' %}selected{% endif %}>En Çok Adım İçeren ↓</option>
-            <option value="title_asc" {% if current_sort == 'title_asc' %}selected{% endif %}>Başlık (A-Z)</option>
+            <option value="clones_desc" {% if current_sort == 'clones_desc' %}selected{% endif %}>Most Popular (Clones ↓)</option>
+            <option value="complexity_desc" {% if current_sort == 'complexity_desc' %}selected{% endif %}>Highest Complexity ↓</option>
+            <option value="complexity_asc" {% if current_sort == 'complexity_asc' %}selected{% endif %}>Simplest Flows ↑</option>
+            <option value="uniqueness_desc" {% if current_sort == 'uniqueness_desc' %}selected{% endif %}>Most Unique ↓</option>
+            <option value="elements_desc" {% if current_sort == 'elements_desc' %}selected{% endif %}>Most Steps ↓</option>
+            <option value="title_asc" {% if current_sort == 'title_asc' %}selected{% endif %}>Title (A-Z)</option>
           </select>
         </label>
       </div>
@@ -497,7 +497,7 @@
             formatter: (params) => {
               const p = params[0];
               const b = buckets[p.dataIndex];
-              return `<strong>Aralık: ${b.label}</strong><br/>Çift Sayısı: <b>${b.count.toLocaleString()}</b> çift<br/>Yüzde: <b>${b.percentage}%</b>`;
+              return `<strong>Bucket: ${b.label}</strong><br/>Pair Count: <b>${b.count.toLocaleString()}</b> pairs<br/>Percentage: <b>${b.percentage}%</b>`;
             }
           },
           grid: { left: 55, right: 25, top: 25, bottom: 40 },
@@ -510,13 +510,13 @@
           },
           yAxis: {
             type: 'value',
-            name: 'Çift Sayısı',
+            name: 'Pair Count',
             nameTextStyle: { color: muted, fontSize: 11 },
             axisLabel: { color: muted, fontSize: 10 },
             splitLine: { lineStyle: { color: line } }
           },
           series: [{
-            name: 'Şablon Çifti',
+            name: 'Template Pair',
             type: 'bar',
             data: buckets.map(b => ({
               value: b.count,

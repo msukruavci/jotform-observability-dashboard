@@ -233,14 +233,15 @@ class ViewTests(TestCase):
 
         self.assertContains(response, "ABCD Experiments")
         self.assertContains(response, "ab_d")
-        self.assertContains(response, "Tam Sistem")
+        self.assertContains(response, "Full System")
         self.assertContains(response, "Open")
         self.assertContains(response, "First build")
         self.assertContains(response, "Final build")
         self.assertContains(response, "To final")
-        self.assertContains(response, "A2.png")
-        self.assertContains(response, "D1.png")
-        self.assertContains(response, "Form ChatGPT tarafındaki Jotform Form plugin/tool ile oluşturuldu")
+        self.assertContains(
+            response,
+            "Form was created via ChatGPT plugin/tool; workflow used the pre-created trigger_form_id",
+        )
 
     def test_experiment_image_endpoint_serves_log_image(self):
         with TemporaryDirectory() as directory:
@@ -397,7 +398,7 @@ class ViewTests(TestCase):
         # Default view (Invocations tab)
         response_inv = self.client.get(reverse("template-intelligence") + "?tab=invocations")
         self.assertEqual(response_inv.status_code, 200)
-        self.assertContains(response_inv, "MCP Oturum &amp; Sorgu Analizi")
+        self.assertContains(response_inv, "MCP Session &amp; Query Analysis")
 
         # Invocations HTMX partial table request
         response_inv_partial = self.client.get(
@@ -418,7 +419,7 @@ class ViewTests(TestCase):
         # Analysis tab request
         response_an = self.client.get(reverse("template-intelligence") + "?tab=analysis")
         self.assertEqual(response_an.status_code, 200)
-        self.assertContains(response_an, "Çapraz Benzerlik")
+        self.assertContains(response_an, "Cross-Similarity")
 
         # Analysis HTMX bucket partial request
         response_an_partial = self.client.get(
@@ -457,7 +458,7 @@ class ViewTests(TestCase):
         self.assertEqual(modal_resp.status_code, 200)
         self.assertTemplateUsed(modal_resp, "tools/_detail_modal.html")
         self.assertContains(modal_resp, "list_workflows")
-        self.assertContains(modal_resp, "Adım Adım Tüm Çağrılmalar")
+        self.assertContains(modal_resp, "Step-by-Step Invocation History")
 
         # 3. Tool Detail page endpoint
         detail_resp = self.client.get(reverse("tool-detail", args=["list_workflows"]))
@@ -548,6 +549,3 @@ class ViewTests(TestCase):
         self.assertEqual(resp_partial.status_code, 200)
         self.assertTemplateUsed(resp_partial, "tools/_invocations_list.html")
         self.assertContains(resp_partial, "Expense Approval")
-
-
-

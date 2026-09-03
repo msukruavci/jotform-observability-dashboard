@@ -47,33 +47,6 @@
   {% endfor %}
 </section>
 
-<article class="panel">
-  <div class="panel-head">
-    <div><p class="eyebrow">Workflow screenshots</p><h2>Visual comparison</h2></div>
-  </div>
-  <div class="experiment-image-grid">
-    {% for item in image_rows %}
-      <figure class="experiment-image-card">
-        <figcaption>
-          <span>{{ item.scenario.label }}</span>
-          <strong>{{ item.scenario.name }}</strong>
-          <small>{{ item.filename|default:"Waiting for image" }}</small>
-        </figcaption>
-        {% if item.filename %}
-          <a href="{% url 'experiment-image' item.filename %}" target="_blank" rel="noreferrer">
-            <img src="{% url 'experiment-image' item.filename %}" alt="{{ item.scenario.label }} workflow screenshot">
-          </a>
-          <small class="mono">{{ item.filenames|join:" · " }}</small>
-        {% else %}
-          <div class="experiment-image-empty">
-            <strong>{{ item.scenario.label }}1.png</strong>
-            <small>{{ item.image_root }}</small>
-          </div>
-        {% endif %}
-      </figure>
-    {% endfor %}
-  </div>
-</article>
 
 <article class="panel">
   <div class="panel-head">

@@ -1,0 +1,185 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Feature Gaps{% endblock %}
+
+{% block content %}
+<header class="page-header" style="margin-bottom: 24px;">
+  <div class="page-title">
+    <h1>Feature Gaps</h1>
+    <p class="muted">Clusters low-scoring search queries using Hybrid Semantic + Keyword matching.</p>
+  </div>
+</header>
+
+<!-- KPI Stats Grid -->
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px;">
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Gaps</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_gaps }}</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Unique Clusters</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_clusters }}</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Unique Sessions Affected</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ unique_sessions }}</div>
+  </div>
+  <div class="card" style="padding: 24px; text-align: center;">
+    <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Avg Gap Score</h3>
+    <div style="font-size: 32px; font-weight: 700; color: #b42318;">{{ avg_score|floatformat:2 }}</div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 32px;">
+  <!-- Controls Panel -->
+  <div class="card" style="padding: 24px;">
+    <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 600;">Clustering Settings</h3>
+    <form method="get" style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <label for="threshold" style="font-weight: 500; font-size: 14px;">
+          Max Score Threshold 
+          <span style="float: right; color: #ff6100; font-weight: 700;">{{ score_threshold }}</span>
+        </label>
+        <input type="range" id="threshold" name="threshold" min="0.1" max="1.0" step="0.01" value="{{ score_threshold }}" oninput="this.previousElementSibling.firstElementChild.textContent = this.value" style="accent-color: #ff6100;">
+        <span class="muted" style="font-size: 12px;">Queries scoring below this will be flagged as gaps.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <label for="cluster_threshold" style="font-weight: 500; font-size: 14px;">
+          Clustering Strictness
+          <span style="float: right; color: #ff6100; font-weight: 700;">{{ cluster_threshold }}</span>
+        </label>
+        <input type="range" id="cluster_threshold" name="cluster_threshold" min="0.1" max="1.0" step="0.01" value="{{ cluster_threshold }}" oninput="this.previousElementSibling.firstElementChild.textContent = this.value" style="accent-color: #ff6100;">
+        <span class="muted" style="font-size: 12px;">Higher values require stricter semantic/keyword matches to group queries.</span>
+      </div>
+      <button type="submit" class="button button-primary" style="margin-top: auto; padding: 10px; width: 100%;">Re-Cluster Data</button>
+    </form>
+  </div>
+
+  <!-- ECharts Visualization -->
+  <div class="card" style="padding: 24px;">
+    <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 600;">Top 10 Feature Gaps</h3>
+    <div id="chart-container" style="width: 100%; height: 280px;"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">Detailed Clusters</h2>
+  </div>
+  <table class="table" style="width: 100%;">
+    <thead>
+      <tr>
+        <th style="width: 80px; text-align: center;">Size</th>
+        <th>Cluster Topic (Base Query)</th>
+        <th style="width: 100px; text-align: center;">Avg Score</th>
+        <th style="width: 100px; text-align: center;">Sessions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cluster in clusters %}
+      <tr style="border-bottom: 1px solid #eaecf0;">
+        <td style="vertical-align: top; text-align: center; padding: 16px 8px;">
+          <span class="badge" style="background: #f2f4f7; color: #344054; font-size: 14px; font-weight: 600;">{{ cluster.items|length }}</span>
+        </td>
+        <td style="vertical-align: top; padding: 16px 8px;">
+          <div style="font-weight: 600; font-size: 15px; color: #101828; margin-bottom: 12px;">{{ cluster.base_query }}</div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            {% for item in cluster.items %}
+            {% if forloop.counter <= 5 %}
+            <div style="display: flex; flex-direction: column; padding: 6px 8px; background: #f9fafb; border-radius: 4px; font-size: 13px; border: 1px solid #eaecf0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <span style="color: #475467;">{{ item.query }}</span>
+                <span class="muted" style="font-size: 12px; margin-left: 12px;">Score: {{ item.score|floatformat:2 }}</span>
+              </div>
+              <div style="display: flex; gap: 8px; font-size: 11px; color: #667085;">
+                <span title="Total Hybrid Score" style="color: #ff6100; font-weight: 500;">Sim: {{ item.hybrid_sim|floatformat:2 }}</span>
+                <span title="Jaccard Keyword Score">Jaccard: {{ item.j_sim|floatformat:2 }}</span>
+                <span title="Semantic Embedding Score">Embed: {{ item.e_sim|floatformat:2 }}</span>
+              </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% if cluster.items|length > 5 %}
+            <div style="padding: 4px 8px; font-size: 12px; color: #ff6100; font-weight: 500;">
+              + {{ cluster.items|length|add:"-5" }} more similar queries
+            </div>
+            {% endif %}
+          </div>
+        </td>
+        <td style="vertical-align: top; text-align: center; padding: 16px 8px;">
+          <span class="badge" style="background: #fef3f2; color: #b42318;">{{ cluster.avg_score|floatformat:2 }}</span>
+        </td>
+        <td style="vertical-align: top; text-align: center; padding: 16px 8px;">
+          <span class="muted" style="font-weight: 600;">{{ cluster.unique_sessions }}</span>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" style="text-align: center; padding: 48px; color: #667085;">No feature gaps found matching these thresholds.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var chartDom = document.getElementById('chart-container');
+    if (!chartDom) return;
+    
+    var myChart = echarts.init(chartDom);
+    var rawData = JSON.parse('{{ chart_data_json|escapejs }}');
+    
+    var option = {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        top: '3%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'value',
+        boundaryGap: [0, 0.01],
+        splitLine: { lineStyle: { color: '#f2f4f7' } }
+      },
+      yAxis: {
+        type: 'category',
+        data: rawData.categories,
+        axisLabel: {
+          color: '#475467',
+          fontFamily: 'Inter, sans-serif'
+        },
+        axisLine: { lineStyle: { color: '#d0d5dd' } }
+      },
+      series: [
+        {
+          name: 'Gap Count',
+          type: 'bar',
+          data: rawData.values,
+          itemStyle: {
+            color: '#ff6100',
+            borderRadius: [0, 4, 4, 0]
+          },
+          label: {
+            show: true,
+            position: 'right',
+            color: '#101828',
+            fontWeight: 600
+          }
+        }
+      ]
+    };
+    
+    myChart.setOption(option);
+    
+    window.addEventListener('resize', function() {
+      myChart.resize();
+    });
+  });
+</script>
+{% endblock %}
