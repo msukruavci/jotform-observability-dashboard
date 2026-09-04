@@ -1,6 +1,6 @@
 <details class="operation-card operation-{{ operation.kind }}" data-operation-kind="{{ operation.kind }}" data-operation-status="{{ operation.span.status }}">
   <summary>
-    <span class="operation-icon kind-{{ operation.kind }}">{% if operation.kind == 'tool' %}⌘{% elif operation.kind == 'external' %}↗{% elif operation.kind == 'model' %}✦{% else %}•{% endif %}</span>
+    <span class="operation-icon kind-{{ operation.kind }}">{% if operation.kind == 'tool' %}⌘{% elif operation.kind == 'internal' %}🔧{% elif operation.kind == 'external' %}↗{% elif operation.kind == 'model' %}✦{% else %}•{% endif %}</span>
     <span class="operation-main"><small>{{ operation.label }}</small>{% if operation.endpoint %}<strong class="operation-request-line"><span class="http-method">{{ operation.method }}</span><span class="operation-endpoint">{{ operation.endpoint }}</span></strong>{% else %}<strong>{{ operation.title }}</strong>{% endif %}<em>{{ operation.summary }}</em></span>
     <span class="operation-duration mono">{{ operation.span.duration_ms|floatformat:1|default:"—" }} ms</span>
     {% include "components/status_badge.html" with status=operation.span.status %}

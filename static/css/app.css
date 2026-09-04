@@ -2184,3 +2184,4 @@ table { font-size: 14px; }
     margin: 15mm 12mm 15mm 12mm;
   }
 }
+.operation-icon.kind-internal, .kind-internal { background: #475569 !important; }

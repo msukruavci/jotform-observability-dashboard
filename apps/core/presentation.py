@@ -224,10 +224,16 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None, childre
     completed_event = event_by_phase(raw_events, "completed") or event_by_phase(raw_events, "failed")
     if tool:
         card["title"] = tool.tool_name
+        if tool.tool_name.startswith("mcp_server."):
+            card["kind"] = "internal"
+            card["label"] = "INTERNAL TRACE"
+            card["raw_label"] = "Internal execution result"
+        else:
+            card["raw_label"] = "Tool result"
+            
         card["summary"] = result_summary(tool.result)
         card["fields"] = payload_fields(tool.arguments)
         card["raw"] = pretty_payload(tool.result)
-        card["raw_label"] = "Tool result"
         request_payload = started_event.get("arguments", tool.arguments) if started_event else tool.arguments
         response_payload = response_from_event(completed_event, tool.result) if completed_event else tool.result
         card["exchanges"] = [
