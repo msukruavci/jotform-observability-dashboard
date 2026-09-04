@@ -211,7 +211,12 @@ def get_tool_meta(tool_name: str) -> dict[str, Any]:
             "category": f"Internal Python: {package.title()}",
             "icon": "🔧",
             "badge_color": "#475569",
-            "description": f"Internal trace for {tool_name}",
+            "description": (
+                f"Internal Python execution trace for '{tool_name}'. "
+                "INPUT/RETURN: Captures raw Python function arguments and return values rather than LLM payloads. "
+                "PURPOSE: Measures internal code latency and isolates sub-component errors. "
+                "IMPACT: High latency or errors here indicate a bottleneck/bug within the MCP server codebase, not an LLM hallucination."
+            ),
         }
 
     # Fallback for dynamic/custom tools
