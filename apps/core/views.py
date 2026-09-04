@@ -1096,6 +1096,24 @@ class FunctionTracesView(TemplateView):
             error_count=Count("id", filter=Q(status="error"))
         ).order_by("-count")
 
+        FUNCTION_DESCRIPTIONS = {
+            "mcp_server.tools.reading.list_workflows": "Lists all available workflows in the workspace. Returns metadata like title and ID.",
+            "mcp_server.tools.reading.get_workflow": "Fetches the full JSON definition of a single workflow, including all steps and connections.",
+            "mcp_server.tools.building.create_form_with_ai": "Generates a Jotform intake form from a natural language prompt. Returns form fields contract.",
+            "mcp_server.tools.building.build_workflow_bulk": "Constructs or modifies a complete workflow tree (steps and connections) in one go. The core builder.",
+            "mcp_server.tools.discovery.list_step_types": "Returns a high-level list of available workflow step types grouped by categories.",
+            "mcp_server.tools.discovery.get_step_schema": "Returns the exact JSON schema required to build a specific step type (e.g. required fields).",
+            "mcp_server.tools.templates.search_workflow_templates": "Searches Jotform's public workflow templates to use as a structural blueprint for AI.",
+            "mcp_server.tools.reading.get_step_details": "Gets metadata and configuration details for a specific step inside a workflow.",
+            "mcp_server.tools.risky.publish_workflow": "Enables/publishes a draft workflow to live production. Requires user confirmation.",
+            "mcp_server.tools.risky.delete_workflow": "Permanently deletes a workflow. Requires user confirmation.",
+            "mcp_server.tools.reading.list_forms": "Lists the user's forms to assign them inside workflows or use them as triggers.",
+            "mcp_server.jotform_client.unflatten_element_properties": "Internal: Parses flattened JSON fields returned by Jotform API back into structured dictionaries.",
+        }
+
+        for s in stats:
+            s["description"] = FUNCTION_DESCRIPTIONS.get(s["name"], "")
+
         model_stats = spans.values("platform_display").annotate(
             count=Count("id"),
             avg_duration_ms=Avg("duration_ms"),

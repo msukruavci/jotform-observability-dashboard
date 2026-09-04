@@ -562,10 +562,25 @@ def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[st
             tool_names = [sp.name for sp in t_spans if sp.kind == "tool"]
             detected_intent = f"İşlem Döngüsü: {', '.join(tool_names[:3])}" if tool_names else "MCP İşlem Bloğu"
 
+        # Group by parent
+        children_by_parent = {}
+        top_level_spans = []
+        for sp in t_spans:
+            if sp.parent_id:
+                children_by_parent.setdefault(sp.parent_id, []).append(sp)
+            else:
+                top_level_spans.append(sp)
+                
+        def build_synth_card(s):
+            child_spans = children_by_parent.get(s.id, [])
+            child_cards = [build_synth_card(c) for c in child_spans]
+            c_card = operation_card(s, raw_events_by_request.get(s.request_id), child_cards)
+            return c_card
+
         operations = []
         prev_op_end = None
-        for sp in t_spans:
-            card = operation_card(sp, raw_events_by_request.get(sp.request_id))
+        for sp in top_level_spans:
+            card = build_synth_card(sp)
             gap_ms = 0.0
             if prev_op_end and sp.started_at:
                 gap_ms = max(0.0, (sp.started_at - prev_op_end).total_seconds() * 1000.0)

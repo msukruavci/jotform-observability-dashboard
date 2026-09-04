@@ -164,7 +164,12 @@
         {% for stat in stats %}
         <tr>
           <td style="font-weight: 600; color: #344054;">
-            <span class="badge" style="background: #f2f4f7; color: #344054;">{{ stat.name }}</span>
+            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+              <span class="badge" style="background: #f2f4f7; color: #344054; max-width: 100%; white-space: normal; word-break: break-all;">{{ stat.name }}</span>
+              {% if stat.description %}
+              <div style="font-size: 12px; color: #667085; font-weight: 400; line-height: 1.4;">{{ stat.description }}</div>
+              {% endif %}
+            </div>
           </td>
           <td style="text-align: right; font-weight: 500;">{{ stat.count }}</td>
           <td style="text-align: right;">
