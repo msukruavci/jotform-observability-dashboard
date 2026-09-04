@@ -63,12 +63,17 @@
       </div>
     {% endif %}
     {% if operation.children %}
-      <div class="nested-operations" style="margin-top: 12px; margin-left: 12px; border-left: 2px solid #eaecf0; padding-left: 12px; display: flex; flex-direction: column; gap: 8px;">
-        <h4 style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #667085; margin: 0 0 4px 0;">Nested Operations</h4>
-        {% for child_op in operation.children %}
-          {% include "components/operation_card.html" with operation=child_op %}
-        {% endfor %}
-      </div>
+      <details class="nested-operations-toggle" style="margin-top: 12px; margin-left: 12px; border-left: 2px solid #eaecf0; padding-left: 12px;">
+        <summary style="cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none;">
+          <h4 style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #667085; margin: 0;">Nested Operations ({{ operation.children|length }})</h4>
+          <span class="chevron" style="color: #667085;">⌄</span>
+        </summary>
+        <div class="nested-operations-content" style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+          {% for child_op in operation.children %}
+            {% include "components/operation_card.html" with operation=child_op %}
+          {% endfor %}
+        </div>
+      </details>
     {% endif %}
   </div>
 </details>

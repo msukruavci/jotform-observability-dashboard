@@ -162,7 +162,7 @@ class SessionDetailView(DetailView):
         context["created_resources"] = session_created_resources(session)
         import requests
         try:
-            resp = requests.get("http://localhost:11434/api/tags", timeout=2)
+            resp = requests.get("http://host.docker.internal:11434/api/tags", timeout=2)
             ollama_models = [{"id": m["name"], "name": m["name"]} for m in resp.json().get("models", [])]
         except Exception:
             ollama_models = [{"id": "qwen2.5:7b", "name": "qwen2.5:7b (Offline)"}]
@@ -876,7 +876,7 @@ PAYLOAD:
         import requests
         try:
             resp = requests.post(
-                "http://localhost:11434/api/generate",
+                "http://host.docker.internal:11434/api/generate",
                 json={
                     "model": selected_model,
                     "prompt": prompt,
@@ -1040,6 +1040,22 @@ class FunctionTracesView(TemplateView):
         q = self.request.GET.get("q", "").strip()
         status_filter = self.request.GET.get("status", "")
         model_filter = self.request.GET.get("model", "")
+        module_filter = self.request.GET.get("module", "")
+        
+        # Extract unique modules
+        all_names = Span.objects.filter(kind="tool").values_list("name", flat=True).distinct()
+        modules_set = set()
+        for name in all_names:
+            if name.startswith("mcp_server."):
+                parts = name.split(".")
+                if len(parts) > 1:
+                    if parts[1] == "tools" and len(parts) > 2:
+                        modules_set.add(f"mcp_server.tools.{parts[2]}")
+                    else:
+                        modules_set.add(f"mcp_server.{parts[1]}")
+            else:
+                modules_set.add("LLM Tools")
+        all_modules = sorted(list(modules_set))
         
         from django.db.models import Case, When, Value, CharField
         
@@ -1060,6 +1076,11 @@ class FunctionTracesView(TemplateView):
             spans = spans.filter(status=status_filter)
         if model_filter:
             spans = spans.filter(platform_display=model_filter)
+        if module_filter:
+            if module_filter == "LLM Tools":
+                spans = spans.exclude(name__startswith="mcp_server.")
+            else:
+                spans = spans.filter(name__startswith=module_filter)
             
         total_calls = spans.count()
         total_errors = spans.filter(status="error").count()
@@ -1088,6 +1109,35 @@ class FunctionTracesView(TemplateView):
 
         recent_calls = spans.select_related("session", "tool_call").order_by("-started_at")[:200]
         
+        # Generate Chart Data
+        from django.db.models.functions import TruncDate
+        import json
+        
+        trend_qs = spans.annotate(date=TruncDate('started_at')).values('date').annotate(
+            avg_duration=Avg('duration_ms'),
+            call_count=Count('id')
+        ).order_by('date')
+        
+        latency_trend_data = {
+            "dates": [t['date'].strftime("%Y-%m-%d") if t['date'] else "Unknown" for t in trend_qs],
+            "latencies": [round(t['avg_duration'] or 0, 1) for t in trend_qs],
+            "counts": [t['call_count'] for t in trend_qs]
+        }
+        
+        module_stats = {}
+        for s in stats:
+            name = s["name"]
+            mod = "LLM Tools"
+            if name.startswith("mcp_server."):
+                parts = name.split(".")
+                if len(parts) > 1:
+                    mod = f"mcp_server.tools.{parts[2]}" if parts[1] == "tools" and len(parts) > 2 else f"mcp_server.{parts[1]}"
+            if mod not in module_stats:
+                module_stats[mod] = 0
+            module_stats[mod] += (s["total_duration_ms"] or 0)
+        
+        module_breakdown_data = [{"name": k, "value": round(v, 1)} for k, v in module_stats.items()]
+
         context.update({
             "active_nav": "function-traces",
             "stats": stats,
@@ -1100,7 +1150,11 @@ class FunctionTracesView(TemplateView):
             "q": q,
             "status_filter": status_filter,
             "model_filter": model_filter,
+            "module_filter": module_filter,
             "all_models": all_models,
+            "all_modules": all_modules,
+            "latency_trend_json": json.dumps(latency_trend_data),
+            "module_breakdown_json": json.dumps(module_breakdown_data),
         })
         return context
 
