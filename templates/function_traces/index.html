@@ -11,40 +11,104 @@
 </header>
 
 <!-- Filters Bar -->
-<div class="card" style="padding: 16px 24px; margin-bottom: 24px; background: #ffffff;">
-  <form method="get" style="display: flex; gap: 16px; align-items: flex-end;">
-    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="q" style="font-size: 13px; font-weight: 500; color: #344054;">Search Function Name</label>
-      <input type="text" id="q" name="q" value="{{ q }}" placeholder="e.g. get_timezone" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif;">
+<style>
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pill-group input[type="radio"] {
+  display: none;
+}
+.pill-label {
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: #f9fafb;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #eaecf0;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.pill-group input[type="radio"]:checked + .pill-label {
+  background: #f4f3ff;
+  color: #6941c6;
+  border-color: #d6bbfb;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+.pill-label:hover {
+  background: #f2f4f7;
+}
+.filter-section {
+  margin-bottom: 20px;
+}
+.filter-section:last-child {
+  margin-bottom: 0;
+}
+.filter-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+</style>
+
+<div class="card" style="padding: 24px; margin-bottom: 24px; background: #ffffff;">
+  <form method="get" id="tracesFilterForm">
+    <div class="filter-section">
+      <span class="filter-label">Search Function</span>
+      <input type="text" id="q" name="q" value="{{ q }}" placeholder="Search by name, e.g. get_timezone" style="width: 100%; max-width: 400px; padding: 10px 14px; border: 1px solid #d0d5dd; border-radius: 8px; font-family: Inter, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05);">
     </div>
-    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="status" style="font-size: 13px; font-weight: 500; color: #344054;">Status</label>
-      <select id="status" name="status" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
-        <option value="">All Statuses</option>
-        <option value="ok" {% if status_filter == 'ok' %}selected{% endif %}>Success (OK)</option>
-        <option value="error" {% if status_filter == 'error' %}selected{% endif %}>Failed (Error)</option>
-      </select>
+
+    <div class="filter-section">
+      <span class="filter-label">Status</span>
+      <div class="pill-group">
+        <input type="radio" id="status_all" name="status" value="" {% if not status_filter %}checked{% endif %}>
+        <label class="pill-label" for="status_all">All Statuses</label>
+        
+        <input type="radio" id="status_ok" name="status" value="ok" {% if status_filter == 'ok' %}checked{% endif %}>
+        <label class="pill-label" for="status_ok">Success (OK)</label>
+        
+        <input type="radio" id="status_error" name="status" value="error" {% if status_filter == 'error' %}checked{% endif %}>
+        <label class="pill-label" for="status_error">Failed (Error)</label>
+      </div>
     </div>
-    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="model" style="font-size: 13px; font-weight: 500; color: #344054;">AI Model</label>
-      <select id="model" name="model" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
-        <option value="">All Models</option>
+
+    <div class="filter-section">
+      <span class="filter-label">AI Model</span>
+      <div class="pill-group">
+        <input type="radio" id="model_all" name="model" value="" {% if not model_filter %}checked{% endif %}>
+        <label class="pill-label" for="model_all">All Models</label>
+        
         {% for m in all_models %}
-        <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
+        <input type="radio" id="model_{{ forloop.counter }}" name="model" value="{{ m }}" {% if model_filter == m %}checked{% endif %}>
+        <label class="pill-label" for="model_{{ forloop.counter }}">{{ m }}</label>
         {% endfor %}
-      </select>
+      </div>
     </div>
-    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="module" style="font-size: 13px; font-weight: 500; color: #344054;">Module / Package</label>
-      <select id="module" name="module" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
-        <option value="">All Modules</option>
+
+    <div class="filter-section">
+      <span class="filter-label">Module / Package</span>
+      <div class="pill-group">
+        <input type="radio" id="module_all" name="module" value="" {% if not module_filter %}checked{% endif %}>
+        <label class="pill-label" for="module_all">All Modules</label>
+        
         {% for m in all_modules %}
-        <option value="{{ m }}" {% if module_filter == m %}selected{% endif %}>{{ m }}</option>
+        <input type="radio" id="module_{{ forloop.counter }}" name="module" value="{{ m }}" {% if module_filter == m %}checked{% endif %}>
+        <label class="pill-label" for="module_{{ forloop.counter }}">{{ m }}</label>
         {% endfor %}
-      </select>
+      </div>
     </div>
-    <button type="submit" class="button button-primary" style="padding: 8px 16px;">Apply Filters</button>
-    <a href="{% url 'function-traces' %}" class="button button-secondary" style="padding: 8px 16px; text-decoration: none;">Clear</a>
+
+    <div style="display: flex; gap: 12px; margin-top: 24px; padding-top: 24px; border-top: 1px solid #eaecf0;">
+      <button type="submit" class="button button-primary" style="padding: 10px 20px;">Apply Filters</button>
+      <a href="{% url 'function-traces' %}" class="button button-secondary" style="padding: 10px 20px; text-decoration: none;">Clear All</a>
+    </div>
   </form>
 </div>
 
