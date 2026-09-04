@@ -160,8 +160,13 @@ class SessionDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         session = self.object
         context["created_resources"] = session_created_resources(session)
-        context["ai_model_stats"] = AITelemetryUsage.get_today_stats()
-        context["ai_model_stats_list"] = list(context["ai_model_stats"].values())
+        import requests
+        try:
+            resp = requests.get("http://localhost:11434/api/tags", timeout=2)
+            ollama_models = [{"id": m["name"], "name": m["name"]} for m in resp.json().get("models", [])]
+        except Exception:
+            ollama_models = [{"id": "qwen2.5:7b", "name": "qwen2.5:7b (Offline)"}]
+        context["ollama_models"] = ollama_models
         spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
         origin = session.started_at or next((span.started_at for span in spans if span.started_at), None)
         waterfall = []
@@ -867,21 +872,24 @@ PAYLOAD:
             prompt += f"\n\nKULLANICI ÖZEL SORUSU:\n{user_question}\n(Lütfen analizine ek olarak bu soruya da spesifik bir yanıt ver.)"
 
 
-        api_key = getattr(settings, "GEMINI_API_KEY", "")
-        if not api_key:
-            html = "<div class='notice error' style='margin-bottom:0;'><strong>GEMINI_API_KEY bulunamadı.</strong> Lütfen <code>config/settings.py</code> veya ortam değişkenlerini kontrol edin.</div>"
-            return HttpResponse(html)
-
-        selected_model = request.GET.get("model", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+        selected_model = request.GET.get("model", "qwen2.5:7b").strip() or "qwen2.5:7b"
+        import requests
         try:
-            AITelemetryUsage.increment(selected_model)
-            genai.configure(api_key=api_key, transport="rest")
-            model = genai.GenerativeModel(selected_model)
-            response = model.generate_content(prompt)
-            md_text = response.text
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": selected_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.2}
+                },
+                timeout=60
+            )
+            resp.raise_for_status()
+            md_text = resp.json().get("response", "")
             html_content = markdown.markdown(md_text, extensions=['fenced_code', 'tables'])
         except Exception as e:
-            html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Analiz Hatası ({selected_model}):</strong> {e}</div>"
+            html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Ollama Bağlantı Hatası ({selected_model}):</strong> {e} <br><em>İpucu: 'ollama run {selected_model}' komutunun çalıştığından emin olun.</em></div>"
 
         return HttpResponse(html_content)
 class FeatureRequestsView(TemplateView):

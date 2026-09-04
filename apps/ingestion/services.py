@@ -66,6 +66,26 @@ def json_value(value: Any) -> Any:
     return value if value is not None else {}
 
 
+def result_issue_severity(result: Any, *, explicit_is_error: bool = False, phase: str = "completed") -> str:
+    if phase == "failed" or explicit_is_error:
+        return "error"
+    if not isinstance(result, dict):
+        return "ok"
+    if result.get("error"):
+        if (
+            result.get("form_id")
+            or result.get("workflow_id")
+            or result.get("partial_success")
+            or result.get("fallback_used")
+            or result.get("ai_fallback")
+        ):
+            return "warning"
+        return "error"
+    if result.get("warnings") or result.get("health_warnings") or result.get("fallback_used"):
+        return "warning"
+    return "ok"
+
+
 def get_workspace() -> Workspace:
     workspace, _ = Workspace.objects.get_or_create(
         slug="jotform-workflow-mcp",
@@ -231,7 +251,8 @@ def normalize_agent_turn(payload: dict) -> None:
         ended = cursor + timedelta(milliseconds=call_duration)
         args = call.get("arguments") or {}
         result = json_value(call.get("result"))
-        is_error = bool(call.get("is_error")) or bool(isinstance(result, dict) and result.get("error"))
+        severity = result_issue_severity(result, explicit_is_error=bool(call.get("is_error")))
+        is_error = severity == "error"
         span = Span.objects.create(
             session=session, turn=turn, trace_id=trace_id,
             external_span_id=str(call.get("span_id") or ""),
@@ -239,7 +260,7 @@ def normalize_agent_turn(payload: dict) -> None:
             name=str(call.get("name") or "unknown_tool"), sequence_no=index,
             started_at=cursor, ended_at=ended, duration_ms=call_duration,
             status="error" if is_error else "ok",
-            attributes={"legacy_embedded": True, "timing_is_estimated": True},
+            attributes={"legacy_embedded": True, "timing_is_estimated": True, "result_severity": severity},
         )
         ToolCall.objects.create(
             span=span, tool_name=span.name, arguments=args, result=result,
@@ -302,8 +323,15 @@ def normalize_mcp_event(payload: dict) -> None:
             span.ended_at = timestamp
             span.duration_ms = float(payload.get("duration_ms") or ((timestamp - span.started_at).total_seconds() * 1000 if span.started_at else 0))
             result = json_value(payload.get("result") or payload.get("error"))
-            embedded_error = isinstance(result, dict) and bool(result.get("error"))
-            span.status = "error" if phase == "failed" or payload.get("is_error") or embedded_error else "ok"
+            severity = str(payload.get("result_severity") or "").strip().lower()
+            if severity not in {"ok", "warning", "error"}:
+                severity = result_issue_severity(
+                    result,
+                    explicit_is_error=bool(payload.get("is_error")),
+                    phase=phase,
+                )
+            span.status = "error" if severity == "error" else "ok"
+            span.attributes = {**span.attributes, "result_severity": severity}
             span.save()
             ToolCall.objects.update_or_create(
                 span=span,

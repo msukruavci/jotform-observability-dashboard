@@ -529,17 +529,17 @@
     <div>
       <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#ffffff; display:flex; align-items:center; gap:8px;">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        Gemini AI Analizi
+        Ollama AI Analizi
       </h3>
       <p id="model-quota-badge" style="margin:4px 0 0 0; font-size:0.78rem; color:#94a3b8;">
-        RPD: <strong id="badge-rpd" style="color:#4ade80;">500 / 500</strong> Remaining · <strong id="badge-rpm" style="color:#a855f7;">15 RPM</strong>
+        Yerel Model Sunucusu (Offline)
       </p>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-      <select id="model-selector" form="ai-form" name="model" onchange="updateModelBadge(this)" style="background:#222430; color:#f1f5f9; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 12px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer;">
-        {% for st in ai_model_stats_list %}
-          <option value="{{ st.id }}" data-rpd="{{ st.remaining }}/{{ st.rpd }}" data-rpm="{{ st.rpm }}" {% if st.id == "gemini-3.5-flash-lite" %}selected{% endif %}>
-            {{ st.name }} ({{ st.remaining }}/{{ st.rpd }} Remaining)
+      <select id="model-selector" form="ai-form" name="model" style="background:#222430; color:#f1f5f9; border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 12px; font-size:0.82rem; font-weight:600; outline:none; cursor:pointer;">
+        {% for st in ollama_models %}
+          <option value="{{ st.id }}" {% if st.id == "qwen2.5:7b" %}selected{% endif %}>
+            {{ st.name }}
           </option>
         {% endfor %}
       </select>
@@ -563,16 +563,7 @@
   </div>
 </div>
 
-<script>
-  function updateModelBadge(selectElem) {
-    const selectedOpt = selectElem.options[selectElem.selectedIndex];
-    const rpd = selectedOpt.getAttribute('data-rpd');
-    const rpm = selectedOpt.getAttribute('data-rpm');
-    document.getElementById('badge-rpd').innerText = rpd;
-    document.getElementById('badge-rpm').innerText = rpm + ' RPM';
-  }
-
-  document.body.addEventListener('htmx:beforeRequest', function(evt) {
+<script>  document.body.addEventListener('htmx:beforeRequest', function(evt) {
     if (evt.detail.elt.id === 'ai-form') {
       const btn = document.getElementById('ai-submit-btn');
       btn.innerHTML = 'Analyzing...';
@@ -591,8 +582,6 @@
   function openAIModal() {
     const modal = document.getElementById('ai-modal');
     const overlay = document.getElementById('ai-modal-overlay');
-    const select = document.getElementById('model-selector');
-    if (select) updateModelBadge(select);
     
     modal.style.display = 'flex';
     overlay.style.display = 'block';

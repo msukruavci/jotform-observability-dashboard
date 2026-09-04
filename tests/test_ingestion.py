@@ -72,6 +72,48 @@ class IngestionTests(TestCase):
         self.assertTrue(tool.is_error)
         self.assertEqual(tool.span.status, "error")
 
+    def test_completed_mcp_partial_side_effect_is_ingested_as_warning(self):
+        rows = [
+            {"timestamp": "2026-08-14T10:00:00Z", "session_id": "mcp-warning", "event_type": "mcp.tool_call.started", "request_id": "tool-warning", "tool": "build_workflow_bulk", "arguments": {}},
+            {
+                "timestamp": "2026-08-14T10:00:00.1Z",
+                "session_id": "mcp-warning",
+                "event_type": "mcp.tool_call.completed",
+                "request_id": "tool-warning",
+                "tool": "build_workflow_bulk",
+                "result": {"workflow_id": "wf_partial_1", "error": "Graph write timed out after workflow creation."},
+                "is_error": False,
+            },
+        ]
+        with TemporaryDirectory() as directory:
+            ingest_file(self.write_jsonl(directory, "mcp-warning.jsonl", rows))
+
+        tool = ToolCall.objects.get()
+        self.assertFalse(tool.is_error)
+        self.assertEqual(tool.span.status, "ok")
+        self.assertEqual(tool.span.attributes["result_severity"], "warning")
+
+    def test_completed_mcp_fallback_result_is_ingested_as_warning(self):
+        rows = [
+            {"timestamp": "2026-08-14T10:00:00Z", "session_id": "mcp-fallback", "event_type": "mcp.tool_call.started", "request_id": "tool-fallback", "tool": "create_form_with_ai", "arguments": {}},
+            {
+                "timestamp": "2026-08-14T10:00:00.1Z",
+                "session_id": "mcp-fallback",
+                "event_type": "mcp.tool_call.completed",
+                "request_id": "tool-fallback",
+                "tool": "create_form_with_ai",
+                "result": {"form_id": "form_1", "fallback_used": True},
+                "is_error": False,
+            },
+        ]
+        with TemporaryDirectory() as directory:
+            ingest_file(self.write_jsonl(directory, "mcp-fallback.jsonl", rows))
+
+        tool = ToolCall.objects.get()
+        self.assertFalse(tool.is_error)
+        self.assertEqual(tool.span.status, "ok")
+        self.assertEqual(tool.span.attributes["result_severity"], "warning")
+
     def test_mcp_experiment_metadata_is_saved_on_session(self):
         rows = [
             {
