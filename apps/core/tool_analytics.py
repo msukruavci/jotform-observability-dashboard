@@ -197,6 +197,23 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
 def get_tool_meta(tool_name: str) -> dict[str, Any]:
     if tool_name in TOOL_METADATA:
         return {"name": tool_name, **TOOL_METADATA[tool_name]}
+        
+    if tool_name.startswith("mcp_server."):
+        parts = tool_name.split(".")
+        clean_title = parts[-1].replace("_", " ").strip().title()
+        package = parts[1] if len(parts) > 1 else "core"
+        if package == "tools" and len(parts) > 2:
+            package = parts[2]
+            
+        return {
+            "name": tool_name,
+            "title": clean_title,
+            "category": f"Internal Python: {package.title()}",
+            "icon": "🔧",
+            "badge_color": "#475569",
+            "description": f"Internal trace for {tool_name}",
+        }
+
     # Fallback for dynamic/custom tools
     clean_title = tool_name.replace("_", " ").title()
     return {
