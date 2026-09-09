@@ -189,7 +189,7 @@ def exchange_message(*, sender: str, receiver: str, label: str, payload: Any, ro
         "role": role,
         "meta": meta,
         "fields": payload_fields(payload, max_items=8, compact_nested=True),
-        "raw": pretty_payload(payload, max_chars=30000),
+        "raw": pretty_payload(payload, max_chars=3000),
     }
 
 
@@ -214,7 +214,7 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None, childre
         "endpoint": "",
         "fields": [],
         "exchanges": [],
-        "raw": pretty_payload(span.attributes),
+        "raw": pretty_payload(span.attributes, max_chars=3000),
         "children": children or [],
     }
     tool = getattr(span, "tool_call", None)
@@ -233,7 +233,7 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None, childre
             
         card["summary"] = result_summary(tool.result)
         card["fields"] = payload_fields(tool.arguments)
-        card["raw"] = pretty_payload(tool.result)
+        card["raw"] = pretty_payload(tool.result, max_chars=3000)
         request_payload = started_event.get("arguments", tool.arguments) if started_event else tool.arguments
         response_payload = response_from_event(completed_event, tool.result) if completed_event else tool.result
         card["exchanges"] = [
@@ -280,7 +280,7 @@ def operation_card(span, raw_events: list[dict[str, Any]] | None = None, childre
                 payload=response_payload, meta=f"HTTP {status_code}" if status_code else "",
             ),
         ]
-        card["raw"] = pretty_payload({"request": request_payload, "response": response_payload})
+        card["raw"] = pretty_payload({"request": request_payload, "response": response_payload}, max_chars=3000)
         card["raw_label"] = "HTTP exchange details"
     elif model:
         tokens = [
@@ -319,7 +319,7 @@ def session_created_resources(session) -> dict[str, Any]:
         if not isinstance(args, dict):
             args = {}
             
-        res = parse_json_string(call.result)
+        res = clean_and_normalize_data(call.result)
         if not isinstance(res, dict):
             res = {}
 
@@ -393,6 +393,21 @@ def session_created_resources(session) -> dict[str, Any]:
                     existing_f["title"] = form_title
                 if form_summary and not existing_f["summary"]:
                     existing_f["summary"] = form_summary
+
+        for assigned in res.get("assigned_forms") or []:
+            if not isinstance(assigned, dict):
+                continue
+            assigned_form_id = str(assigned.get("form_id") or "").strip()
+            if not assigned_form_id:
+                continue
+            if assigned_form_id not in forms_map:
+                forms_map[assigned_form_id] = {
+                    "form_id": assigned_form_id,
+                    "title": f"Assigned Form #{assigned_form_id}",
+                    "form_url": assigned.get("form_url") or f"https://www.jotform.com/build/{assigned_form_id}",
+                    "summary": "",
+                    "is_created": False,
+                }
 
     return {
         "workflows": list(workflows_map.values()),
@@ -560,7 +575,7 @@ def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[st
                 break
         if not detected_intent:
             tool_names = [sp.name for sp in t_spans if sp.kind == "tool"]
-            detected_intent = f"İşlem Döngüsü: {', '.join(tool_names[:3])}" if tool_names else "MCP İşlem Bloğu"
+            detected_intent = f"Operation Cycle: {', '.join(tool_names[:3])}" if tool_names else "MCP Operation Block"
 
         # Group by parent
         children_by_parent = {}
@@ -596,7 +611,7 @@ def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[st
             "id": f"synthetic-{idx}",
             "sequence_no": idx,
             "question": detected_intent,
-            "answer": f"Bu turda {len(t_spans)} işlem tamamlandı. (Aktif işlem süresi: {format_duration_human(dur_ms)})",
+            "answer": f"Completed {len(t_spans)} operation(s) in this turn. (Active operation time: {format_duration_human(dur_ms)})",
             "started_at": start,
             "ended_at": end,
             "duration_ms": dur_ms,
@@ -607,6 +622,3 @@ def reconstruct_synthetic_turns(spans: list[Any], raw_events_by_request: dict[st
         result.append({"turn": synth_turn, "operations": operations})
 
     return result
-
-
-

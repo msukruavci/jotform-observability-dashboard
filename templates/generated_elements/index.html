@@ -11,11 +11,11 @@
 </header>
 
 <!-- Filters Bar -->
-<div class="card" style="padding: 16px 24px; margin-bottom: 24px; background: #ffffff;">
+<div class="card" style="padding: 16px 24px; margin-bottom: 24px; background: var(--surface);">
   <form method="get" style="display: flex; gap: 16px; align-items: flex-end;">
     <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="time" style="font-size: 13px; font-weight: 500; color: #344054;">Time Range</label>
-      <select id="time" name="time" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
+      <label for="time" style="font-size: 13px; font-weight: 500; color: var(--ink);">Time Range</label>
+      <select id="time" name="time" style="padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 6px; font-family: Inter, sans-serif; background: var(--surface);">
         <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All Time</option>
         <option value="24h" {% if time_filter == '24h' %}selected{% endif %}>Last 24 Hours</option>
         <option value="7d" {% if time_filter == '7d' %}selected{% endif %}>Last 7 Days</option>
@@ -23,8 +23,8 @@
       </select>
     </div>
     <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-      <label for="model" style="font-size: 13px; font-weight: 500; color: #344054;">AI Model</label>
-      <select id="model" name="model" style="padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-family: Inter, sans-serif; background: #fff;">
+      <label for="model" style="font-size: 13px; font-weight: 500; color: var(--ink);">AI Model</label>
+      <select id="model" name="model" style="padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 6px; font-family: Inter, sans-serif; background: var(--surface);">
         <option value="">All Models</option>
         {% for m in all_models %}
         <option value="{{ m }}" {% if model_filter == m %}selected{% endif %}>{{ m }}</option>
@@ -48,7 +48,7 @@
     <div class="card-header">
       <h2 class="card-title">Element Types</h2>
     </div>
-    <table class="table" style="width: 100%;">
+    <table class="table data-grid" style="width: 100%;">
       <thead>
         <tr>
           <th>Step Type</th>
@@ -59,16 +59,16 @@
       <tbody>
         {% for item in type_counts %}
         <tr>
-          <td style="font-weight: 600; color: #344054;">
-            <span class="badge" style="background: #f2f4f7; color: #344054; font-family: 'IBM Plex Mono', monospace;">{{ item.name }}</span>
+          <td style="font-weight: 600; color: var(--ink);">
+            <span class="badge" style="background: var(--surface-soft); color: var(--ink); font-family: 'IBM Plex Mono', monospace;">{{ item.name }}</span>
           </td>
           <td style="text-align: right; font-weight: 500;">{{ item.value }}</td>
-          <td style="text-align: right; color: #667085;">
+          <td style="text-align: right; color: var(--muted);">
             {% widthratio item.value total_elements 100 %}%
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="3" style="text-align: center; padding: 24px; color: #667085;">No elements generated yet.</td></tr>
+        <tr><td colspan="3" style="text-align: center; padding: 24px; color: var(--muted);">No elements generated yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -79,7 +79,7 @@
   <div class="card-header">
     <h2 class="card-title">Recent Generated Workflows (Max 100)</h2>
   </div>
-  <table class="table" style="width: 100%;">
+  <table class="table data-grid" style="width: 100%;">
     <thead>
       <tr>
         <th>Timestamp</th>
@@ -93,10 +93,10 @@
       {% for wf in recent_workflows %}
       <tr>
         <td class="muted" style="white-space: nowrap;">{{ wf.timestamp|date:"Y-m-d H:i:s" }}</td>
-        <td><span style="font-size: 13px; font-weight: 500; color: #475467;">{{ wf.platform }}</span></td>
+        <td><span style="font-size: 13px; font-weight: 500; color: var(--text);">{{ wf.platform }}</span></td>
         <td>
-          <div style="font-weight: 500; color: #101828; margin-bottom: 4px;">{{ wf.intent }}</div>
-          <div style="font-size: 12px; color: #667085;">{{ wf.reason }}</div>
+          <div style="font-weight: 500; color: var(--ink); margin-bottom: 4px;">{{ wf.intent }}</div>
+          <div style="font-size: 12px; color: var(--muted);">{{ wf.reason }}</div>
         </td>
         <td style="text-align: center;">
           <span class="badge" style="background: #ecfdf3; color: #027a48;">{{ wf.step_count }}</span>
@@ -104,13 +104,13 @@
         <td>
           <div style="display: flex; flex-wrap: wrap; gap: 4px;">
             {% for t in wf.types %}
-              <span class="badge" style="background: #f9fafb; color: #475467; border: 1px solid #eaecf0; font-size: 11px; padding: 2px 6px;">{{ t }}</span>
+              <span class="badge" style="background: var(--surface-soft); color: var(--text); border: 1px solid var(--line); font-size: 11px; padding: 2px 6px;">{{ t }}</span>
             {% endfor %}
           </div>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5" style="text-align: center; padding: 48px; color: #667085;">No workflows have been built yet.</td></tr>
+      <tr><td colspan="5" style="text-align: center; padding: 48px; color: var(--muted);">No workflows have been built yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -123,57 +123,70 @@
     
     var myChart = echarts.init(chartDom);
     var rawData = JSON.parse('{{ chart_data_json|escapejs }}');
-    
-    var option = {
-      tooltip: {
-        trigger: 'item',
-        formatter: '{b}: {c} ({d}%)'
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        top: 'middle',
-        itemGap: 12,
-        textStyle: { fontFamily: 'Inter, sans-serif', color: '#475467' }
-      },
-      color: ['#ff6100', '#f79009', '#fdb022', '#12b76a', '#32d583', '#0ba5ec', '#3dd5f3'],
-      series: [
-        {
-          name: 'Elements',
-          type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['65%', '50%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 4,
-            borderColor: '#fff',
-            borderWidth: 2
-          },
-          label: {
-            show: false,
-            position: 'center'
-          },
-          emphasis: {
+
+    var draw = function() {
+      var styles = getComputedStyle(document.documentElement);
+      var muted = styles.getPropertyValue('--muted').trim();
+      var ink = styles.getPropertyValue('--ink').trim();
+      var surface = styles.getPropertyValue('--surface').trim();
+      var text = styles.getPropertyValue('--text').trim();
+      var line = styles.getPropertyValue('--line').trim();
+
+      myChart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'item',
+          formatter: '{b}: {c} ({d}%)',
+          backgroundColor: surface,
+          borderColor: line,
+          textStyle: { color: text, fontSize: 12 }
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          top: 'middle',
+          itemGap: 12,
+          textStyle: { fontFamily: 'Inter, sans-serif', color: muted }
+        },
+        color: ['#ff6100', '#f79009', '#fdb022', '#12b76a', '#32d583', '#0ba5ec', '#3dd5f3'],
+        series: [
+          {
+            name: 'Elements',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['65%', '50%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 6,
+              borderColor: surface,
+              borderWidth: 2
+            },
             label: {
-              show: true,
-              fontSize: 18,
-              fontWeight: 'bold',
-              color: '#101828'
-            }
-          },
-          labelLine: {
-            show: false
-          },
-          data: rawData
-        }
-      ]
+              show: false,
+              position: 'center'
+            },
+            emphasis: {
+              label: {
+                show: true,
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: ink
+              }
+            },
+            labelLine: {
+              show: false
+            },
+            data: rawData
+          }
+        ]
+      }, true);
     };
-    
-    myChart.setOption(option);
-    
+
+    draw();
     window.addEventListener('resize', function() {
       myChart.resize();
     });
+    window.addEventListener('pulse-theme-change', draw);
   });
 </script>
 {% endblock %}

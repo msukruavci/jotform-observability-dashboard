@@ -10,59 +10,12 @@
   </div>
 </header>
 
-<!-- Filters Bar -->
-<style>
-.pill-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.pill-group input[type="radio"] {
-  display: none;
-}
-.pill-label {
-  padding: 6px 14px;
-  border-radius: 20px;
-  background: #f9fafb;
-  color: #475467;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid #eaecf0;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-.pill-group input[type="radio"]:checked + .pill-label {
-  background: #f4f3ff;
-  color: #6941c6;
-  border-color: #d6bbfb;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
-}
-.pill-label:hover {
-  background: #f2f4f7;
-}
-.filter-section {
-  margin-bottom: 20px;
-}
-.filter-section:last-child {
-  margin-bottom: 0;
-}
-.filter-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #344054;
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-</style>
-
-<div class="card" style="padding: 24px; margin-bottom: 24px; background: #ffffff;">
+<!-- Filters Bar — .pill-group/.pill-label/.filter-section/.filter-label now live in app.css -->
+<div class="card" style="padding: 24px; margin-bottom: 24px;">
   <form method="get" id="tracesFilterForm">
     <div class="filter-section">
       <span class="filter-label">Search Function</span>
-      <input type="text" id="q" name="q" value="{{ q }}" placeholder="Search by name, e.g. get_timezone" style="width: 100%; max-width: 400px; padding: 10px 14px; border: 1px solid #d0d5dd; border-radius: 8px; font-family: Inter, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05);">
+      <input type="text" id="q" name="q" value="{{ q }}" placeholder="Search by name, e.g. get_timezone" style="width: 100%; max-width: 400px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 8px; font-family: Inter, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05);">
     </div>
 
     <div class="filter-section">
@@ -105,7 +58,7 @@
       </div>
     </div>
 
-    <div style="display: flex; gap: 12px; margin-top: 24px; padding-top: 24px; border-top: 1px solid #eaecf0;">
+    <div style="display: flex; gap: 12px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line);">
       <button type="submit" class="button button-primary" style="padding: 10px 20px;">Apply Filters</button>
       <a href="{% url 'function-traces' %}" class="button button-secondary" style="padding: 10px 20px; text-decoration: none;">Clear All</a>
     </div>
@@ -113,10 +66,10 @@
 </div>
 
 <!-- KPI Stats Grid -->
-<div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px;">
+<div class="stats-grid stagger" style="gap: 24px; margin-bottom: 32px;">
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Calls</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_calls }}</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ total_calls }}</div>
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Error Rate</h3>
@@ -124,22 +77,22 @@
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Avg Duration</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ avg_duration|floatformat:2 }}ms</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ avg_duration|floatformat:2 }}ms</div>
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Execution Time</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_duration|floatformat:2 }}ms</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ total_duration|floatformat:2 }}ms</div>
   </div>
 </div>
 
 <!-- Charts Section -->
 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 32px;">
-  <div class="card" style="padding: 24px; background: #fff;">
-    <h3 style="font-size: 14px; margin-bottom: 16px; color: #344054;">Latency & Volume Trend</h3>
+  <div class="card" style="padding: 24px; background: var(--surface);">
+    <h3 style="font-size: 14px; margin-bottom: 16px; color: var(--ink);">Latency & Volume Trend</h3>
     <div id="latencyTrendChart" style="width: 100%; height: 300px;"></div>
   </div>
-  <div class="card" style="padding: 24px; background: #fff;">
-    <h3 style="font-size: 14px; margin-bottom: 16px; color: #344054;">Execution Time by Module</h3>
+  <div class="card" style="padding: 24px; background: var(--surface);">
+    <h3 style="font-size: 14px; margin-bottom: 16px; color: var(--ink);">Execution Time by Module</h3>
     <div id="moduleBreakdownChart" style="width: 100%; height: 300px;"></div>
   </div>
 </div>
@@ -150,7 +103,7 @@
     <div class="card-header">
       <h2 class="card-title">Function Aggregates</h2>
     </div>
-    <table class="table" style="width: 100%;">
+    <table class="table data-grid" style="width: 100%;">
       <thead>
         <tr>
           <th>Function Name</th>
@@ -163,11 +116,11 @@
       <tbody>
         {% for stat in stats %}
         <tr>
-          <td style="font-weight: 600; color: #344054;">
+          <td style="font-weight: 600; color: var(--ink);">
             <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-              <span class="badge" style="background: #f2f4f7; color: #344054; max-width: 100%; white-space: normal; word-break: break-all;">{{ stat.name }}</span>
+              <span class="badge" style="background: var(--surface-soft); color: var(--ink); max-width: 100%; white-space: normal; word-break: break-all;">{{ stat.name }}</span>
               {% if stat.description %}
-              <div style="font-size: 12px; color: #667085; font-weight: 400; line-height: 1.4;">{{ stat.description }}</div>
+              <div style="font-size: 12px; color: var(--muted); font-weight: 400; line-height: 1.4;">{{ stat.description }}</div>
               {% endif %}
             </div>
           </td>
@@ -179,11 +132,11 @@
             <span class="muted">0</span>
             {% endif %}
           </td>
-          <td style="text-align: right; color: #667085;">{{ stat.avg_duration_ms|floatformat:1 }}ms</td>
-          <td style="text-align: right; color: #667085;">{{ stat.total_duration_ms|floatformat:1 }}ms</td>
+          <td style="text-align: right; color: var(--muted);">{{ stat.avg_duration_ms|floatformat:1 }}ms</td>
+          <td style="text-align: right; color: var(--muted);">{{ stat.total_duration_ms|floatformat:1 }}ms</td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" style="text-align: center; padding: 24px; color: #667085;">No traces found.</td></tr>
+        <tr><td colspan="5" style="text-align: center; padding: 24px; color: var(--muted);">No traces found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -194,7 +147,7 @@
     <div class="card-header">
       <h2 class="card-title">Model Breakdown</h2>
     </div>
-    <table class="table" style="width: 100%;">
+    <table class="table data-grid" style="width: 100%;">
       <thead>
         <tr>
           <th>Model</th>
@@ -206,11 +159,11 @@
       <tbody>
         {% for m in model_stats %}
         <tr>
-          <td style="font-weight: 600; color: #344054;">
+          <td style="font-weight: 600; color: var(--ink);">
             {{ m.display }}
           </td>
           <td style="text-align: right; font-weight: 500;">{{ m.count }}</td>
-          <td style="text-align: right; color: #667085;">{{ m.avg_duration_ms|floatformat:2 }}ms</td>
+          <td style="text-align: right; color: var(--muted);">{{ m.avg_duration_ms|floatformat:2 }}ms</td>
           <td style="text-align: right;">
             {% if m.error_count > 0 %}
             <span class="badge" style="background: #fef3f2; color: #b42318;">{{ m.error_count }}</span>
@@ -220,7 +173,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" style="text-align: center; padding: 24px; color: #667085;">No model data found.</td></tr>
+        <tr><td colspan="4" style="text-align: center; padding: 24px; color: var(--muted);">No model data found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -231,7 +184,7 @@
   <div class="card-header">
     <h2 class="card-title">Recent Function Traces (Max 200)</h2>
   </div>
-  <table class="table" style="width: 100%;">
+  <table class="table data-grid" style="width: 100%;">
     <thead>
       <tr>
         <th>Status</th>
@@ -260,21 +213,21 @@
           {% if call.name in 'search_workflow_templates,build_workflow_bulk' %}
           <span class="badge" style="background: #eff8ff; color: #175cd3; font-family: 'IBM Plex Mono', monospace;">{{ call.name }}</span>
           {% else %}
-          <span class="badge" style="background: #f2f4f7; color: #344054; font-family: 'IBM Plex Mono', monospace;">{{ call.name }}</span>
+          <span class="badge" style="background: var(--surface-soft); color: var(--ink); font-family: 'IBM Plex Mono', monospace;">{{ call.name }}</span>
           {% endif %}
         </td>
         <td>
           {% if call.session %}
-            <span style="font-size: 13px; font-weight: 500; color: #475467;">{{ call.session.platform_display }}</span>
+            <span style="font-size: 13px; font-weight: 500; color: var(--text);">{{ call.session.platform_display }}</span>
           {% else %}
             <span class="muted">-</span>
           {% endif %}
         </td>
-        <td style="text-align: right; color: #667085;">{{ call.duration_ms|floatformat:2 }}ms</td>
+        <td style="text-align: right; color: var(--muted);">{{ call.duration_ms|floatformat:2 }}ms</td>
         <td class="muted" style="white-space: nowrap;">{{ call.started_at|date:"Y-m-d H:i:s" }}</td>
         <td>
           {% if call.tool_call and call.tool_call.arguments %}
-          <div style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #f9fafb; padding: 4px 8px; border-radius: 4px; border: 1px solid #eaecf0; color: #475467;">
+          <div style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--surface-soft); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); color: var(--text);">
             {{ call.tool_call.arguments }}
           </div>
           {% else %}
@@ -283,7 +236,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="6" style="text-align: center; padding: 48px; color: #667085;">No traces match the selected filters.</td></tr>
+      <tr><td colspan="6" style="text-align: center; padding: 48px; color: var(--muted);">No traces match the selected filters.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -297,45 +250,68 @@ document.addEventListener("DOMContentLoaded", function() {
     const trendData = JSON.parse('{{ latency_trend_json|escapejs }}');
     if (document.getElementById('latencyTrendChart')) {
         const trendChart = echarts.init(document.getElementById('latencyTrendChart'));
-        trendChart.setOption({
-            tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-            legend: { data: ['Avg Latency (ms)', 'Call Count'], bottom: 0 },
-            grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-            xAxis: [{ type: 'category', data: trendData.dates, axisTick: { alignWithLabel: true } }],
-            yAxis: [
-                { type: 'value', name: 'Latency (ms)', position: 'left' },
-                { type: 'value', name: 'Count', position: 'right' }
-            ],
-            series: [
-                { name: 'Avg Latency (ms)', type: 'line', smooth: true, yAxisIndex: 0, data: trendData.latencies, itemStyle: { color: '#0ea5e9' } },
-                { name: 'Call Count', type: 'bar', yAxisIndex: 1, data: trendData.counts, itemStyle: { color: '#e2e8f0' } }
-            ]
-        });
+        const drawTrend = () => {
+            const s = getComputedStyle(document.documentElement);
+            const muted = s.getPropertyValue('--muted').trim();
+            const line = s.getPropertyValue('--line').trim();
+            const text = s.getPropertyValue('--text').trim();
+            const surface = s.getPropertyValue('--surface').trim();
+            const orange = s.getPropertyValue('--orange').trim();
+            const blue = s.getPropertyValue('--blue').trim();
+            trendChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: surface, borderColor: line, textStyle: { color: text, fontSize: 12 } },
+                legend: { data: ['Avg Latency (ms)', 'Call Count'], bottom: 0, textStyle: { color: muted } },
+                grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+                xAxis: [{ type: 'category', data: trendData.dates, axisTick: { alignWithLabel: true }, axisLabel: { color: muted }, axisLine: { lineStyle: { color: line } } }],
+                yAxis: [
+                    { type: 'value', name: 'Latency (ms)', position: 'left', axisLabel: { color: muted }, splitLine: { lineStyle: { color: line } }, nameTextStyle: { color: muted } },
+                    { type: 'value', name: 'Count', position: 'right', axisLabel: { color: muted }, splitLine: { show: false }, nameTextStyle: { color: muted } }
+                ],
+                series: [
+                    { name: 'Avg Latency (ms)', type: 'line', smooth: true, yAxisIndex: 0, data: trendData.latencies, itemStyle: { color: blue }, lineStyle: { width: 2.5 } },
+                    { name: 'Call Count', type: 'bar', yAxisIndex: 1, data: trendData.counts, itemStyle: { color: orange, opacity: .35, borderRadius: [4, 4, 0, 0] } }
+                ]
+            }, true);
+        };
+        drawTrend();
         window.addEventListener('resize', () => trendChart.resize());
+        window.addEventListener('pulse-theme-change', drawTrend);
     }
 
     // Breakdown Chart
     const breakdownData = JSON.parse('{{ module_breakdown_json|escapejs }}');
     if (document.getElementById('moduleBreakdownChart')) {
         const pieChart = echarts.init(document.getElementById('moduleBreakdownChart'));
-        pieChart.setOption({
-            tooltip: { trigger: 'item', formatter: '{b}: <br/>{c}ms ({d}%)' },
-            legend: { type: 'scroll', top: 'bottom' },
-            series: [
-                {
-                    name: 'Module Time',
-                    type: 'pie',
-                    radius: ['40%', '70%'],
-                    avoidLabelOverlap: false,
-                    itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
-                    label: { show: false, position: 'center' },
-                    emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
-                    labelLine: { show: false },
-                    data: breakdownData
-                }
-            ]
-        });
+        const drawBreakdown = () => {
+            const s = getComputedStyle(document.documentElement);
+            const muted = s.getPropertyValue('--muted').trim();
+            const ink = s.getPropertyValue('--ink').trim();
+            const surface = s.getPropertyValue('--surface').trim();
+            const text = s.getPropertyValue('--text').trim();
+            const line = s.getPropertyValue('--line').trim();
+            pieChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'item', formatter: '{b}: <br/>{c}ms ({d}%)', backgroundColor: surface, borderColor: line, textStyle: { color: text, fontSize: 12 } },
+                legend: { type: 'scroll', top: 'bottom', textStyle: { color: muted } },
+                series: [
+                    {
+                        name: 'Module Time',
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: { borderRadius: 10, borderColor: surface, borderWidth: 2 },
+                        label: { show: false, position: 'center' },
+                        emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold', color: ink } },
+                        labelLine: { show: false },
+                        data: breakdownData
+                    }
+                ]
+            }, true);
+        };
+        drawBreakdown();
         window.addEventListener('resize', () => pieChart.resize());
+        window.addEventListener('pulse-theme-change', drawBreakdown);
     }
 });
 </script>

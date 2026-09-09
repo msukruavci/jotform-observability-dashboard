@@ -9,13 +9,13 @@
   </div>
   <div class="page-head-actions">
     {% if active_time_label %}
-    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+    <span class="active-time-badge" title="Filtered range">⏱️ {{ active_time_label }}</span>
     {% endif %}
     <a class="button" href="{% url 'session-list' %}">Explore sessions <span>→</span></a>
   </div>
 </div>
 
-<div class="metric-grid">
+<div class="metric-grid stagger">
   <article class="metric-card">
     <p>Total sessions <span>◎</span></p>
     <strong>{{ session_count }}</strong>
@@ -24,7 +24,12 @@
   <article class="metric-card">
     <p>Success rate <span class="positive">↗</span></p>
     <strong>{{ success_rate }}%</strong>
-    <small>based on terminal session status</small>
+    <div class="trend-row">
+      {% if success_rate >= 95 %}<span class="trend-pill up">● Healthy</span>
+      {% elif success_rate >= 80 %}<span class="trend-pill flat">● Watch</span>
+      {% else %}<span class="trend-pill down">● At risk</span>{% endif %}
+      <small>terminal session status</small>
+    </div>
   </article>
   <article class="metric-card accent">
     <p>p95 total duration <span>⌁</span></p>
@@ -38,22 +43,17 @@
   </article>
 </div>
 
-<div class="platforms-overview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 20px;">
+<div class="platforms-overview-grid stagger">
   {% for p in platforms %}
-    <a href="{% url 'session-list' %}?platform={{ p.key }}" class="platform-summary-card" style="background: var(--bg-surface, #1e2029); border: 1px solid var(--border-color, #2d313e); border-radius: 8px; padding: 14px 16px; text-decoration: none; display: flex; flex-direction: column; gap: 8px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.95rem; color: var(--text-primary, #f0f6fc);">
-          <span>{{ p.icon }}</span>
-          <span>{{ p.name }}</span>
-        </span>
-        <span style="background: {{ p.badge_bg }}; color: {{ p.badge_color }}; font-weight: 700; font-size: 0.8rem; padding: 2px 8px; border-radius: 999px;">
-          {{ p.session_count }} runs
-        </span>
+    <a href="{% url 'session-list' %}?platform={{ p.key }}" class="platform-summary-card">
+      <div class="platform-summary-head">
+        <span class="platform-summary-name"><span>{{ p.icon }}</span><span>{{ p.name }}</span></span>
+        <span class="platform-summary-count" style="background: {{ p.badge_bg }}; color: {{ p.badge_color }};">{{ p.session_count }} runs</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-secondary, #c9d1d9); border-top: 1px dashed var(--border-color, #2d313e); padding-top: 6px;">
-        <span>Success: <strong style="color: #3fb950;">{{ p.success_rate }}%</strong></span>
-        <span>Avg: <strong>{{ p.avg_duration_ms|floatformat:0 }} ms</strong></span>
-        <span>Cost: <strong>${{ p.cost_usd|floatformat:3 }}</strong></span>
+      <div class="platform-summary-stats">
+        <span>Success <strong class="ok">{{ p.success_rate }}%</strong></span>
+        <span>Avg <strong>{{ p.avg_duration_ms|floatformat:0 }} ms</strong></span>
+        <span>Cost <strong>${{ p.cost_usd|floatformat:3 }}</strong></span>
       </div>
     </a>
   {% endfor %}
@@ -74,7 +74,7 @@
 
 <article class="panel flush">
   <div class="panel-head padded"><div><p class="eyebrow">Latency</p><h2>Slowest sessions</h2></div><a href="{% url 'session-list' %}">View all →</a></div>
-  <div class="table-wrap"><table>
+  <div class="table-wrap"><table class="data-grid">
     <thead><tr><th>Session</th><th>Provider / model</th><th>Status</th><th>Started</th><th class="num">Total duration</th></tr></thead>
     <tbody>{% for session in slow_sessions %}<tr><td><a class="mono-link" href="{% url 'session-detail' session.id %}">{{ session.display_name }}</a></td><td>{{ session.provider|default:"—" }} <span class="muted">/ {{ session.model|default:"—" }}</span></td><td>{% include "components/status_badge.html" with status=session.status %}</td><td>{{ session.started_at|date:"d M Y H:i:s"|default:"—" }}</td><td class="num mono">{{ session.duration_ms|floatformat:0 }} ms</td></tr>{% empty %}<tr><td colspan="5" class="empty">Sessions will appear here after the first data is ingested.</td></tr>{% endfor %}</tbody>
   </table></div>
@@ -91,13 +91,14 @@
       const text = styles.getPropertyValue('--muted').trim();
       const line = styles.getPropertyValue('--line').trim();
       const orange = styles.getPropertyValue('--orange').trim();
+      const surface = styles.getPropertyValue('--surface').trim();
       chart.setOption({
         backgroundColor: 'transparent',
         grid: {left: 34, right: 16, top: 20, bottom: 24},
-        tooltip: {trigger: 'axis', backgroundColor: styles.getPropertyValue('--surface').trim(), borderColor: line, textStyle: {color: styles.getPropertyValue('--text').trim(), fontSize: 12}},
+        tooltip: {trigger: 'axis', backgroundColor: surface, borderColor: line, textStyle: {color: styles.getPropertyValue('--text').trim(), fontSize: 12}, extraCssText: 'box-shadow: var(--shadow-md); border-radius: 10px;'},
         xAxis: {type: 'category', data: activity.map(x => x.day), boundaryGap: false, axisLine: {lineStyle: {color: line}}, axisTick: {show: false}, axisLabel: {color: text, fontSize: 11}},
         yAxis: {type: 'value', splitLine: {lineStyle: {color: line}}, axisLabel: {color: text, fontSize: 11}},
-        series: [{type: 'line', smooth: true, data: activity.map(x => x.count), symbol: 'circle', symbolSize: 6, lineStyle: {width: 2.5, color: orange}, itemStyle: {color: orange, borderColor: '#fff', borderWidth: 2}, areaStyle: {color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: 'rgba(255,97,0,.22)'}, {offset: 1, color: 'rgba(255,97,0,0)'}]}}}]
+        series: [{type: 'line', smooth: true, data: activity.map(x => x.count), symbol: 'circle', symbolSize: 6, lineStyle: {width: 2.5, color: orange}, itemStyle: {color: orange, borderColor: surface, borderWidth: 2}, areaStyle: {color: {type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: 'rgba(255,97,0,.26)'}, {offset: 1, color: 'rgba(255,97,0,0)'}]}}}]
       }, true);
     };
     draw();

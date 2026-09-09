@@ -7,9 +7,10 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 
 from apps.findings.models import Finding
+from apps.core.cache_utils import get_cached_value, set_cached_value
 from apps.traces.models import ExternalCall, Session, Span, ToolCall, Turn
 from apps.core.metrics import percentile
 from apps.core.presentation import clean_and_normalize_data, human_value, pretty_payload, result_summary
@@ -192,6 +193,22 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "description": "Performs preflight checks and semantic validation to spot missing links or orphaned nodes.",
     },
 }
+_TOOLS_OVERVIEW_CACHE: dict[tuple, dict[str, Any]] = {}
+
+
+def is_public_mcp_tool_name(tool_name: str) -> bool:
+    return bool(tool_name) and not tool_name.startswith("mcp_server.")
+
+
+def _tool_calls_signature() -> tuple:
+    calls = ToolCall.objects.aggregate(count=Count("span_id"), max_span_started=Max("span__started_at"))
+    findings = Finding.objects.aggregate(count=Count("id"), newest=Max("created_at"))
+    return (
+        calls["count"] or 0,
+        calls["max_span_started"],
+        findings["count"] or 0,
+        findings["newest"],
+    )
 
 
 def get_tool_meta(tool_name: str) -> dict[str, Any]:
@@ -250,8 +267,24 @@ def get_tools_overview_metrics(
     status_filter: str = "",
     search_q: str = "",
 ) -> dict[str, Any]:
+    cache_key = (
+        _tool_calls_signature(),
+        since.isoformat() if since else "",
+        platform_filter or "",
+        category_filter or "",
+        status_filter or "",
+        search_q or "",
+    )
+    cached = _TOOLS_OVERVIEW_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    db_cached = get_cached_value("tools_overview_metrics_v2_public_only", cache_key)
+    if db_cached is not None:
+        _TOOLS_OVERVIEW_CACHE[cache_key] = db_cached
+        return db_cached
+
     grouped: dict[str, list[ToolCall]] = defaultdict(list)
-    tool_calls_qs = ToolCall.objects.select_related("span", "span__session")
+    tool_calls_qs = ToolCall.objects.exclude(tool_name__startswith="mcp_server.").select_related("span", "span__session")
     if since is not None:
         tool_calls_qs = tool_calls_qs.filter(span__started_at__gte=since)
 
@@ -331,7 +364,7 @@ def get_tools_overview_metrics(
     # Categories breakdown
     cat_counts = Counter(row["category"] for row in tool_rows)
 
-    return {
+    result = {
         "total_tools_count": len(grouped),
         "total_invocations": total_calls_count,
         "total_errors": total_errors_count,
@@ -345,12 +378,17 @@ def get_tools_overview_metrics(
         "active_category": c_filter or "all",
         "active_status": status_filter or "all",
     }
+    if len(_TOOLS_OVERVIEW_CACHE) > 16:
+        _TOOLS_OVERVIEW_CACHE.clear()
+    _TOOLS_OVERVIEW_CACHE[cache_key] = result
+    set_cached_value("tools_overview_metrics_v2_public_only", cache_key, result)
+    return result
 
 
 def get_tool_detail_data(
     tool_name: str,
     page: int = 1,
-    page_size: int = 25,
+    page_size: int = 10,
     search_q: str = "",
     status_filter: str = "",
     platform_filter: str = "",
@@ -363,6 +401,21 @@ def get_tool_detail_data(
     and step-by-step invocation history for a specific tool with rich multi-field filtering.
     """
     tool_meta = get_tool_meta(tool_name)
+    if not is_public_mcp_tool_name(tool_name):
+        return {
+            "meta": tool_meta,
+            "total_calls": 0,
+            "filtered_calls_count": 0,
+            "invocations": [],
+            "page_obj": None,
+            "active_filters": {
+                "q": search_q,
+                "status": status_filter or "all",
+                "platform": platform_filter or "all",
+                "speed": speed_filter or "all",
+                "http": http_filter or "all",
+            },
+        }
     all_calls_qs = (
         ToolCall.objects.filter(tool_name=tool_name)
         .select_related("span", "span__session")
@@ -651,9 +704,9 @@ def get_tool_detail_data(
             "is_error": c.is_error or (span.status == "error" if span else False),
             "status": span.status if span else ("error" if c.is_error else "ok"),
             "arguments_summary": human_value(c.arguments, max_chars=140),
-            "arguments_formatted": pretty_payload(c.arguments, max_chars=40000),
+            "arguments_formatted": pretty_payload(c.arguments, max_chars=3000),
             "result_summary": result_summary(c.result),
-            "result_formatted": pretty_payload(c.result, max_chars=40000),
+            "result_formatted": pretty_payload(c.result, max_chars=3000),
             "http_calls": http_list,
             "http_count": len(http_list),
             "result_bytes": c.result_bytes,

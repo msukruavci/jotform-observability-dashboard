@@ -111,7 +111,7 @@ class ViewTests(TestCase):
         self.assertContains(detail_resp, "https://www.jotform.com/build/262353379332055")
         self.assertContains(detail_resp, "Open in Jotform Workflow Builder")
 
-        list_resp = self.client.get(reverse("session-list"))
+        list_resp = self.client.get(reverse("session-list") + "?platform=mcp")
         self.assertEqual(list_resp.status_code, 200)
         self.assertContains(list_resp, "242943285550056")
         self.assertContains(list_resp, "262353379332055")
@@ -229,7 +229,9 @@ class ViewTests(TestCase):
                 )
 
             with override_settings(MCP_LOG_ROOT=Path(directory)):
-                response = self.client.get(reverse("experiments"))
+                # Experiment data/notes must survive the global live-activity
+                # filters, which are still shown in the shared header.
+                response = self.client.get(reverse("experiments") + "?range=1h&platform=gpt")
 
         self.assertContains(response, "ABCD Experiments")
         self.assertContains(response, "ab_d")
@@ -306,12 +308,39 @@ class ViewTests(TestCase):
                 status="ok", started_at=session.started_at, duration_ms=10, sequence_no=sequence,
             )
 
-        response = self.client.get(reverse("session-list"))
+        response = self.client.get(reverse("session-list") + "?platform=mcp")
         content = response.content.decode()
 
         self.assertNotIn("session-view", content)
         self.assertLess(content.index("latest-activ"), content.index("older-activi"))
         self.assertContains(response, "MCP activity")
+
+    def test_session_list_hides_mcp_direct_by_default_but_shows_when_selected(self):
+        now = timezone.now()
+        direct = Session.objects.create(
+            workspace=self.session.workspace, external_session_id="direct-mcp-demo",
+            provider="mcp", status="ok", started_at=now, ended_at=now,
+        )
+        Span.objects.create(
+            session=direct, trace_id="trace-direct", kind="tool", name="list_forms",
+            status="ok", started_at=now, duration_ms=10,
+        )
+        claude = Session.objects.create(
+            workspace=self.session.workspace, external_session_id="claude-visible-demo",
+            provider="anthropic", model="claude-3-7-sonnet", status="ok",
+            started_at=now, ended_at=now,
+        )
+        Span.objects.create(
+            session=claude, trace_id="trace-claude", kind="tool", name="list_forms",
+            status="ok", started_at=now, duration_ms=10,
+        )
+
+        default_response = self.client.get(reverse("session-list"))
+        self.assertContains(default_response, "claude-visib")
+        self.assertNotContains(default_response, "direct-mcp-d")
+
+        mcp_response = self.client.get(reverse("session-list") + "?platform=mcp")
+        self.assertContains(mcp_response, "direct-mcp-d")
 
     def test_session_list_hx_request_returns_live_results_partial(self):
         response = self.client.get(reverse("session-list"), HTTP_HX_REQUEST="true")
@@ -381,6 +410,45 @@ class ViewTests(TestCase):
         self.assertContains(response, "HTTP response")
         self.assertContains(response, "workflow/42")
         self.assertContains(response, "content")
+
+    def test_session_detail_hides_internal_function_traces_but_keeps_public_tools_and_apis(self):
+        started = timezone.now()
+        public_span = Span.objects.create(
+            session=self.session, trace_id="mcp-trace", kind="tool", name="get_workflow",
+            status="ok", started_at=started, duration_ms=85,
+        )
+        ToolCall.objects.create(
+            span=public_span, tool_name="get_workflow", arguments={"workflow_id": "123"},
+            result={"name": "Approval"}, argument_hash=digest({"workflow_id": "123"}),
+            result_hash=digest({"name": "Approval"}), result_bytes=20,
+        )
+        internal_span = Span.objects.create(
+            session=self.session, trace_id="mcp-trace", kind="tool",
+            name="mcp_server.tree_builder.build_tree", status="ok",
+            started_at=started + timedelta(milliseconds=10), duration_ms=12,
+        )
+        ToolCall.objects.create(
+            span=internal_span, tool_name="mcp_server.tree_builder.build_tree",
+            arguments={"nodes": 2}, result={"ok": True},
+            argument_hash=digest({"nodes": 2}), result_hash=digest({"ok": True}),
+            result_bytes=12,
+        )
+        api_span = Span.objects.create(
+            session=self.session, trace_id="mcp-trace", kind="external",
+            name="GET https://api.jotform.com/workflow/{id}", status="ok",
+            started_at=started + timedelta(milliseconds=20), duration_ms=25,
+        )
+        ExternalCall.objects.create(
+            span=api_span, service="jotform", method="GET",
+            url_template="https://api.jotform.com/workflow/{id}",
+            status_code=200, request_bytes=32, response_bytes=25,
+        )
+
+        response = self.client.get(reverse("session-detail", args=[self.session.id]))
+
+        self.assertContains(response, "get_workflow")
+        self.assertContains(response, "Jotform API")
+        self.assertNotContains(response, "mcp_server.tree_builder.build_tree")
 
     def test_payload_presentation_is_human_readable_and_bounded(self):
         self.assertEqual(payload_fields({"enabled": True})[0]["value"], "Yes")
@@ -465,6 +533,32 @@ class ViewTests(TestCase):
         self.assertEqual(detail_resp.status_code, 200)
         self.assertTemplateUsed(detail_resp, "tools/overview.html")
 
+    def test_tool_intelligence_excludes_internal_function_traces(self):
+        public_span = Span.objects.create(
+            session=self.session, trace_id="trace-public-tool", kind="tool",
+            name="build_workflow_bulk", status="ok", started_at=timezone.now(), duration_ms=250,
+        )
+        ToolCall.objects.create(
+            span=public_span, tool_name="build_workflow_bulk", arguments={"title": "Demo"},
+            result={"workflow_id": "123"}, argument_hash=digest({"title": "Demo"}),
+            result_hash=digest({"workflow_id": "123"}), result_bytes=30,
+        )
+        internal_span = Span.objects.create(
+            session=self.session, trace_id="trace-internal-tool", kind="tool",
+            name="mcp_server.tree_builder.build_tree", status="ok", started_at=timezone.now(), duration_ms=12,
+        )
+        ToolCall.objects.create(
+            span=internal_span, tool_name="mcp_server.tree_builder.build_tree", arguments={"nodes": 2},
+            result={"ok": True}, argument_hash=digest({"nodes": 2}),
+            result_hash=digest({"ok": True}), result_bytes=12,
+        )
+
+        response = self.client.get(reverse("tool-intelligence"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "build_workflow_bulk")
+        self.assertNotContains(response, "mcp_server.tree_builder.build_tree")
+
     def test_time_filter_presets_across_pages(self):
         # Create an older session (5 days ago) and a recent session (10 minutes ago)
         now = timezone.now()
@@ -486,7 +580,7 @@ class ViewTests(TestCase):
         resp_1h = self.client.get(reverse("overview") + "?range=1h")
         self.assertEqual(resp_1h.status_code, 200)
         self.assertEqual(resp_1h.context["active_time_range"], "1h")
-        self.assertContains(resp_1h, "Son 1 Saat")
+        self.assertContains(resp_1h, "Last 1 Hour")
 
         # 2. Test Sessions list with 24h filter
         resp_sessions_24h = self.client.get(reverse("session-list") + "?range=24h")

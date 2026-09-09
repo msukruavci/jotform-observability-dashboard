@@ -212,7 +212,7 @@
 <article class="panel conversation-panel {% if not conversation %}mcp-only-panel{% endif %}">
   <div class="panel-head conversation-head">
     <div><p class="eyebrow">{% if session.turns.count %}Conversation and operations{% else %}MCP activity only{% endif %}</p><h2>{% if session.turns.count %}Conversation history{% else %}Operation activity & Turns{% endif %}</h2></div>
-    <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ total_operations_count|default:unassigned_operations|length }} operations{% endif %}</span>
+    <span class="conversation-count">{% if conversation %}{{ conversation|length }} turns{% else %}{{ total_operations_count|default:unassigned_operations|length }} operations{% endif %}{% if internal_span_count %} · {{ internal_span_count }} internal hidden{% endif %}</span>
   </div>
   <div class="conversation-toolbar" aria-label="Operation view controls">
     <div class="operation-filters" role="group" aria-label="Operation type">
@@ -303,11 +303,11 @@
         {% if operations_page_obj.has_other_pages %}
           <nav class="pagination" style="margin: 20px 0; display: flex; justify-content: center; gap: 12px; align-items: center;">
             {% if operations_page_obj.has_previous %}
-              <a class="filter-btn" href="?op_page={{ operations_page_obj.previous_page_number }}">← Previous (50)</a>
+              <a class="filter-btn" href="?op_page={{ operations_page_obj.previous_page_number }}">← Previous (10)</a>
             {% endif %}
             <span class="muted font-mono text-sm">Page {{ operations_page_obj.number }} of {{ operations_page_obj.paginator.num_pages }} (Total {{ total_operations_count }} operations)</span>
             {% if operations_page_obj.has_next %}
-              <a class="filter-btn" href="?op_page={{ operations_page_obj.next_page_number }}">Next (50) →</a>
+              <a class="filter-btn" href="?op_page={{ operations_page_obj.next_page_number }}">Next (10) →</a>
             {% endif %}
           </nav>
         {% endif %}
@@ -320,13 +320,16 @@
 
 <div class="split-grid trace-layout">
   <article class="panel"><div class="panel-head"><div><p class="eyebrow">Critical path</p><h2>Execution timeline</h2></div><span class="legend"><i class="model-color"></i> model <i class="tool-color"></i> tool <i class="external-color"></i> http</span></div>
+    {% if waterfall_total_count > waterfall|length or internal_span_count %}
+      <p class="muted" style="margin: 0 0 10px;">Showing first {{ waterfall|length }} of {{ waterfall_total_count }} visible spans{% if internal_span_count %}; {{ internal_span_count }} internal function traces are available under Function Traces{% endif %}.</p>
+    {% endif %}
     <div class="waterfall-head"><span>Operation</span><span>0</span><span>time →</span><span>{{ session.duration_ms|floatformat:0 }} ms</span></div>
     <div class="waterfall">{% for item in waterfall %}<div class="waterfall-row"><div class="span-name depth-{{ item.span.parent_id|yesno:'1,0' }}"><span class="kind-dot kind-{{ item.span.kind }}"></span><span><strong>{{ item.span.name }}</strong><small>{{ item.span.kind }} · {{ item.span.status }}</small></span></div><div class="track"><span class="bar kind-{{ item.span.kind }} status-{{ item.span.status }}" style="left:{{ item.offset_pct|stringformat:'.3f' }}%;width:{{ item.width_pct|stringformat:'.3f' }}%"></span></div><div class="span-time mono">{{ item.span.duration_ms|floatformat:1|default:"—" }} ms</div></div>{% empty %}<div class="empty">No normalized spans were found for this session.</div>{% endfor %}</div>
   </article>
   <aside class="panel trace-findings"><div class="panel-head"><div><p class="eyebrow">Rule engine</p><h2>Findings</h2></div></div>{% for finding in findings %}<details class="finding-card" {% if finding.status == 'open' %}open{% endif %}><summary><span class="severity severity-{{ finding.severity }}"></span><span><strong>{{ finding.display_title }}</strong><small>{{ finding.confidence }} confidence · {{ finding.wasted_ms|floatformat:0 }} ms</small></span></summary><p>{{ finding.display_description }}</p><div class="recommendation"><strong>Recommendation</strong>{{ finding.display_recommendation }}</div><form method="post">{% csrf_token %}<input type="hidden" name="finding_id" value="{{ finding.id }}"><button name="action" value="accepted">Accept</button><button class="ghost" name="action" value="false_positive">False positive</button></form></details>{% empty %}<div class="empty">No findings for this session.</div>{% endfor %}</aside>
 </div>
 <details class="panel developer-panel">
-  <summary><span class="code-icon">{ }</span><span><strong>Raw telemetry</strong><small>Source JSON events for debugging</small></span><span class="muted">{{ raw_events|length }} events</span><span class="chevron">⌄</span></summary>
+  <summary><span class="code-icon">{ }</span><span><strong>Raw telemetry</strong><small>Source JSON events for debugging</small></span><span class="muted">{{ raw_events_total_count|default:raw_events|length }} events</span><span class="chevron">⌄</span></summary>
   <div class="developer-events">
     {% for item in raw_events %}
       <details class="raw-event">
@@ -350,6 +353,17 @@
     {% empty %}
       <div class="empty">No raw events match this session ID.</div>
     {% endfor %}
+    {% if raw_events_page_obj.has_other_pages %}
+      <nav class="pagination" style="margin: 16px 0 0; display: flex; justify-content: center; gap: 12px; align-items: center;">
+        {% if raw_events_page_obj.has_previous %}
+          <a class="filter-btn" href="?raw_page={{ raw_events_page_obj.previous_page_number }}{% if operations_page_obj.number %}&op_page={{ operations_page_obj.number }}{% endif %}">← Previous (25)</a>
+        {% endif %}
+        <span class="muted font-mono text-sm">Page {{ raw_events_page_obj.number }} of {{ raw_events_page_obj.paginator.num_pages }}</span>
+        {% if raw_events_page_obj.has_next %}
+          <a class="filter-btn" href="?raw_page={{ raw_events_page_obj.next_page_number }}{% if operations_page_obj.number %}&op_page={{ operations_page_obj.number }}{% endif %}">Next (25) →</a>
+        {% endif %}
+      </nav>
+    {% endif %}
   </div>
 </details>
 {% endblock %}
@@ -376,14 +390,21 @@
     const escapeHtml = value => value.replace(/[&<>]/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[character]));
     const jsonPattern = /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?=\s*:))|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
     
-    document.querySelectorAll('.json-viewer').forEach(viewer => {
+    const highlightViewer = viewer => {
+      if (viewer.dataset.highlighted === 'true') return;
       const raw = viewer.textContent;
       viewer.dataset.raw = raw;
       viewer.innerHTML = escapeHtml(raw).replace(jsonPattern, (token, key, string, boolean, nullValue, number) => {
         const type = key ? 'key' : string ? 'string' : boolean ? 'boolean' : nullValue ? 'null' : 'number';
         return `<span class="json-${type}">${token}</span>`;
       });
-    });
+      viewer.dataset.highlighted = 'true';
+    };
+
+    document.querySelectorAll('details').forEach(detail => detail.addEventListener('toggle', () => {
+      if (!detail.open) return;
+      detail.querySelectorAll('.json-viewer').forEach(highlightViewer);
+    }));
 
     // Copy JSON handler
     document.querySelectorAll('[data-copy-json]').forEach(button => button.addEventListener('click', async () => {

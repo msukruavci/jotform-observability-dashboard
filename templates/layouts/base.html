@@ -73,7 +73,7 @@
           </button>
         </div>
       </header>
-      <section class="content" id="main-content">
+      <section class="content animate-in" id="main-content">
         {% if messages %}{% for message in messages %}<div class="notice" role="status"><span>✓</span>{{ message }}</div>{% endfor %}{% endif %}
         {% block content %}{% endblock %}
       </section>
@@ -124,6 +124,8 @@
           }
         });
       }
+    };
+
     // Time Filter Range Persistence
     document.addEventListener('click', function(e) {
       const pill = e.target.closest('.time-pill');

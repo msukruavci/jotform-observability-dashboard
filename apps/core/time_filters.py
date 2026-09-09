@@ -9,13 +9,13 @@ from django.utils import timezone
 
 
 TIME_PRESETS = [
-    {"key": "1h", "label": "Son 1 Saat", "short_label": "1s", "hours": 1},
-    {"key": "6h", "label": "Son 6 Saat", "short_label": "6s", "hours": 6},
-    {"key": "24h", "label": "Son 24 Saat", "short_label": "24s", "hours": 24},
-    {"key": "3d", "label": "Son 3 Gün", "short_label": "3g", "days": 3},
-    {"key": "7d", "label": "Son 7 Gün", "short_label": "7g", "days": 7},
-    {"key": "30d", "label": "Son 30 Gün", "short_label": "30g", "days": 30},
-    {"key": "all", "label": "Tüm Zamanlar", "short_label": "Tümü", "all": True},
+    {"key": "1h", "label": "Last 1 Hour", "short_label": "1h", "hours": 1},
+    {"key": "6h", "label": "Last 6 Hours", "short_label": "6h", "hours": 6},
+    {"key": "24h", "label": "Last 24 Hours", "short_label": "24h", "hours": 24},
+    {"key": "3d", "label": "Last 3 Days", "short_label": "3d", "days": 3},
+    {"key": "7d", "label": "Last 7 Days", "short_label": "7d", "days": 7},
+    {"key": "30d", "label": "Last 30 Days", "short_label": "30d", "days": 30},
+    {"key": "all", "label": "All Time", "short_label": "All", "all": True},
 ]
 
 PRESET_MAP = {p["key"]: p for p in TIME_PRESETS}

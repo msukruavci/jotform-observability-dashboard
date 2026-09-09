@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from apps.core.cache_utils import get_cached_value, set_cached_value
+
 LOGGER = logging.getLogger(__name__)
 
 # Search candidates for templates_dataset.json
@@ -27,6 +29,24 @@ _CACHED_DATASET: list[dict[str, Any]] | None = None
 _CACHED_DATASET_MTIME: float = 0.0
 _CACHED_SIMILARITY_ANALYSIS: dict[str, Any] | None = None
 _CACHED_SIMILARITY_MTIME: float = 0.0
+_CACHED_TEMPLATE_INVOCATIONS: dict[tuple, dict[str, Any]] = {}
+
+
+def _session_logs_signature(session_dir: Path | None) -> tuple[int, float, int]:
+    if not session_dir or not session_dir.exists():
+        return (0, 0.0, 0)
+    count = 0
+    newest_mtime = 0.0
+    total_size = 0
+    for path in session_dir.glob("*.jsonl"):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        count += 1
+        newest_mtime = max(newest_mtime, stat.st_mtime)
+        total_size += stat.st_size
+    return (count, newest_mtime, total_size)
 
 
 def get_dataset_path() -> Path | None:
@@ -353,6 +373,20 @@ def get_mcp_template_invocations(
     dataset = load_templates_dataset()
     dataset_map = {str(item.get("id")): item for item in dataset}
     session_dir = get_session_logs_dir()
+    cache_key = (
+        _session_logs_signature(session_dir),
+        query_filter or "",
+        tool_filter or "",
+        int(page or 1),
+        int(per_page or 15),
+    )
+    cached = _CACHED_TEMPLATE_INVOCATIONS.get(cache_key)
+    if cached is not None:
+        return cached
+    db_cached = get_cached_value("template_invocations", cache_key)
+    if db_cached is not None:
+        _CACHED_TEMPLATE_INVOCATIONS[cache_key] = db_cached
+        return db_cached
 
     invocations: list[dict[str, Any]] = []
 
@@ -485,7 +519,7 @@ def get_mcp_template_invocations(
     end = start + per_page
     page_items = filtered[start:end]
 
-    return {
+    result = {
         "invocations": page_items,
         "total_items": total_items,
         "page": page,
@@ -503,6 +537,11 @@ def get_mcp_template_invocations(
             "top_retrieved": top_retrieved_in_sessions,
         },
     }
+    if len(_CACHED_TEMPLATE_INVOCATIONS) > 24:
+        _CACHED_TEMPLATE_INVOCATIONS.clear()
+    _CACHED_TEMPLATE_INVOCATIONS[cache_key] = result
+    set_cached_value("template_invocations", cache_key, result)
+    return result
 
 
 def get_similarity_analysis_path() -> Path | None:
@@ -605,4 +644,3 @@ def get_cross_similarity_analysis_data(
             "prev_page": page - 1 if page > 1 else None,
         },
     }
-

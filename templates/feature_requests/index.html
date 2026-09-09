@@ -11,18 +11,18 @@
 </header>
 
 <!-- KPI Stats Grid -->
-<div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 32px;">
+<div class="stats-grid stagger" style="gap: 24px; margin-bottom: 32px;">
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Total Gaps</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_gaps }}</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ total_gaps }}</div>
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Unique Clusters</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ total_clusters }}</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ total_clusters }}</div>
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Unique Sessions Affected</h3>
-    <div style="font-size: 32px; font-weight: 700; color: #101828;">{{ unique_sessions }}</div>
+    <div style="font-size: 32px; font-weight: 700; color: var(--ink);">{{ unique_sessions }}</div>
   </div>
   <div class="card" style="padding: 24px; text-align: center;">
     <h3 class="muted" style="font-size: 14px; margin-bottom: 8px;">Avg Gap Score</h3>
@@ -66,7 +66,7 @@
   <div class="card-header">
     <h2 class="card-title">Detailed Clusters</h2>
   </div>
-  <table class="table" style="width: 100%;">
+  <table class="table data-grid" style="width: 100%;">
     <thead>
       <tr>
         <th style="width: 80px; text-align: center;">Size</th>
@@ -77,21 +77,21 @@
     </thead>
     <tbody>
       {% for cluster in clusters %}
-      <tr style="border-bottom: 1px solid #eaecf0;">
+      <tr style="border-bottom: 1px solid var(--line);">
         <td style="vertical-align: top; text-align: center; padding: 16px 8px;">
-          <span class="badge" style="background: #f2f4f7; color: #344054; font-size: 14px; font-weight: 600;">{{ cluster.items|length }}</span>
+          <span class="badge" style="background: var(--surface-soft); color: var(--ink); font-size: 14px; font-weight: 600;">{{ cluster.items|length }}</span>
         </td>
         <td style="vertical-align: top; padding: 16px 8px;">
-          <div style="font-weight: 600; font-size: 15px; color: #101828; margin-bottom: 12px;">{{ cluster.base_query }}</div>
+          <div style="font-weight: 600; font-size: 15px; color: var(--ink); margin-bottom: 12px;">{{ cluster.base_query }}</div>
           <div style="display: flex; flex-direction: column; gap: 4px;">
             {% for item in cluster.items %}
             {% if forloop.counter <= 5 %}
-            <div style="display: flex; flex-direction: column; padding: 6px 8px; background: #f9fafb; border-radius: 4px; font-size: 13px; border: 1px solid #eaecf0;">
+            <div style="display: flex; flex-direction: column; padding: 6px 8px; background: var(--surface-soft); border-radius: 4px; font-size: 13px; border: 1px solid var(--line);">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <span style="color: #475467;">{{ item.query }}</span>
+                <span style="color: var(--text);">{{ item.query }}</span>
                 <span class="muted" style="font-size: 12px; margin-left: 12px;">Score: {{ item.score|floatformat:2 }}</span>
               </div>
-              <div style="display: flex; gap: 8px; font-size: 11px; color: #667085;">
+              <div style="display: flex; gap: 8px; font-size: 11px; color: var(--muted);">
                 <span title="Total Hybrid Score" style="color: #ff6100; font-weight: 500;">Sim: {{ item.hybrid_sim|floatformat:2 }}</span>
                 <span title="Jaccard Keyword Score">Jaccard: {{ item.j_sim|floatformat:2 }}</span>
                 <span title="Semantic Embedding Score">Embed: {{ item.e_sim|floatformat:2 }}</span>
@@ -115,7 +115,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="4" style="text-align: center; padding: 48px; color: #667085;">No feature gaps found matching these thresholds.</td>
+        <td colspan="4" style="text-align: center; padding: 48px; color: var(--muted);">No feature gaps found matching these thresholds.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -126,60 +126,75 @@
   document.addEventListener('DOMContentLoaded', function() {
     var chartDom = document.getElementById('chart-container');
     if (!chartDom) return;
-    
+
     var myChart = echarts.init(chartDom);
     var rawData = JSON.parse('{{ chart_data_json|escapejs }}');
-    
-    var option = {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' }
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        top: '3%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'value',
-        boundaryGap: [0, 0.01],
-        splitLine: { lineStyle: { color: '#f2f4f7' } }
-      },
-      yAxis: {
-        type: 'category',
-        data: rawData.categories,
-        axisLabel: {
-          color: '#475467',
-          fontFamily: 'Inter, sans-serif'
+
+    var draw = function() {
+      var styles = getComputedStyle(document.documentElement);
+      var line = styles.getPropertyValue('--line').trim();
+      var muted = styles.getPropertyValue('--muted').trim();
+      var ink = styles.getPropertyValue('--ink').trim();
+      var orange = styles.getPropertyValue('--orange').trim();
+      var surface = styles.getPropertyValue('--surface').trim();
+      var text = styles.getPropertyValue('--text').trim();
+
+      myChart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+          backgroundColor: surface,
+          borderColor: line,
+          textStyle: { color: text, fontSize: 12 }
         },
-        axisLine: { lineStyle: { color: '#d0d5dd' } }
-      },
-      series: [
-        {
-          name: 'Gap Count',
-          type: 'bar',
-          data: rawData.values,
-          itemStyle: {
-            color: '#ff6100',
-            borderRadius: [0, 4, 4, 0]
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          top: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'value',
+          boundaryGap: [0, 0.01],
+          splitLine: { lineStyle: { color: line } },
+          axisLabel: { color: muted }
+        },
+        yAxis: {
+          type: 'category',
+          data: rawData.categories,
+          axisLabel: {
+            color: muted,
+            fontFamily: 'Inter, sans-serif'
           },
-          label: {
-            show: true,
-            position: 'right',
-            color: '#101828',
-            fontWeight: 600
+          axisLine: { lineStyle: { color: line } }
+        },
+        series: [
+          {
+            name: 'Gap Count',
+            type: 'bar',
+            data: rawData.values,
+            itemStyle: {
+              color: orange,
+              borderRadius: [0, 6, 6, 0]
+            },
+            label: {
+              show: true,
+              position: 'right',
+              color: ink,
+              fontWeight: 600
+            }
           }
-        }
-      ]
+        ]
+      }, true);
     };
-    
-    myChart.setOption(option);
-    
+
+    draw();
     window.addEventListener('resize', function() {
       myChart.resize();
     });
+    window.addEventListener('pulse-theme-change', draw);
   });
 </script>
 {% endblock %}

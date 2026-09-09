@@ -502,7 +502,7 @@ def _ingest_locked_file(path: Path) -> dict[str, int | str]:
     source.last_seen_at = timezone.now()
     if stat.st_size < source.last_offset:
         source.status = "truncated"
-        source.error_message = "Dosya aynı inode ile küçüldü; güvenli idempotency için otomatik sıfırlama yapılmadı."
+        source.error_message = "File shrank while keeping the same inode; automatic reset was skipped to preserve safe idempotency."
         source.save()
         return {"path": str(path), "ingested": 0, "quarantined": 0, "status": "truncated"}
     ingested = quarantined = 0
@@ -518,7 +518,7 @@ def _ingest_locked_file(path: Path) -> dict[str, int | str]:
             try:
                 payload = json.loads(line.decode("utf-8"))
                 if not isinstance(payload, dict):
-                    raise ValueError("JSONL satırı object olmalı")
+                    raise ValueError("JSONL line must be an object")
                 kind = detect_kind(path, payload)
                 with transaction.atomic():
                     _, created = RawEvent.objects.get_or_create(
@@ -551,7 +551,7 @@ def _ingest_locked_file(path: Path) -> dict[str, int | str]:
     source.records_ingested += ingested
     source.last_ingested_at = timezone.now()
     source.status = "error" if quarantined else "healthy"
-    source.error_message = f"{quarantined} satır quarantine'a alındı" if quarantined else ""
+    source.error_message = f"{quarantined} line(s) quarantined" if quarantined else ""
     source.save()
     return {"path": str(path), "ingested": ingested, "quarantined": quarantined, "status": source.status}
 

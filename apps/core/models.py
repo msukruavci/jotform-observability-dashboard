@@ -16,6 +16,19 @@ class Workspace(models.Model):
         return self.name
 
 
+class DashboardCache(models.Model):
+    key = models.CharField(max_length=255, unique=True, db_index=True)
+    signature = models.CharField(max_length=500)
+    value = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["key", "signature"])]
+
+    def __str__(self) -> str:
+        return self.key
+
+
 MODEL_LIMITS = {
     "gemini-3.5-flash-lite": {"rpd": 500, "rpm": 15, "name": "Gemini 3.5 Flash Lite"},
     "gemini-3.1-flash-lite": {"rpd": 500, "rpm": 15, "name": "Gemini 3.1 Flash Lite"},

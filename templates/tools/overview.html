@@ -15,7 +15,7 @@
 </div>
 
 <!-- Overview KPI Cards -->
-<div class="metric-grid">
+<div class="metric-grid stagger">
   <article class="metric-card accent">
     <p>Total Invocations <span>⚡</span></p>
     <strong>{{ total_invocations|default:0 }}</strong>
@@ -84,7 +84,7 @@
   </div>
 
   <div class="table-wrap">
-    <table id="tools-data-table">
+    <table id="tools-data-table" class="data-grid">
       <thead>
         <tr>
           <th>Tool Name &amp; Category</th>

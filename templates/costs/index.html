@@ -5,13 +5,13 @@
   <div><p class="eyebrow">Economics</p><h1>Cost and capacity</h1><p>Separate usage with known pricing from coverage that cannot yet be priced.</p></div>
   {% if active_time_label %}
   <div class="page-head-actions">
-    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+    <span class="active-time-badge" title="Filtered range">⏱️ {{ active_time_label }}</span>
   </div>
   {% endif %}
 </div>
-<div class="metric-grid two"><article class="metric-card accent"><p>Total known cost <span>$</span></p><strong>${{ metrics.total_cost_usd|floatformat:6 }}</strong><small>sum of turns with known pricing</small></article><article class="metric-card"><p>Pricing coverage <span>%</span></p><strong>{{ metrics.cost_coverage }}%</strong><small>share of turns with known pricing</small></article></div>
+<div class="metric-grid two stagger"><article class="metric-card accent"><p>Total known cost <span>$</span></p><strong>${{ metrics.total_cost_usd|floatformat:6 }}</strong><small>sum of turns with known pricing</small></article><article class="metric-card"><p>Pricing coverage <span>%</span></p><strong>{{ metrics.cost_coverage }}%</strong><small>share of turns with known pricing</small></article></div>
 <article class="panel"><div class="panel-head"><div><p class="eyebrow">Model distribution</p><h2>Cost by model</h2></div></div><div id="cost-chart" class="chart" aria-label="Cost by model chart"></div></article>
-<article class="panel flush"><div class="table-wrap"><table><thead><tr><th>Provider</th><th>Model</th><th class="num">Turns</th><th class="num">Known cost</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.provider }}</td><td class="mono">{{ row.model }}</td><td class="num">{{ row.turns }}</td><td class="num mono">${{ row.cost|floatformat:6 }}</td></tr>{% empty %}<tr><td class="empty" colspan="4">The current logs do not contain pricing information yet.</td></tr>{% endfor %}</tbody></table></div></article>
+<article class="panel flush"><div class="table-wrap"><table class="data-grid"><thead><tr><th>Provider</th><th>Model</th><th class="num">Turns</th><th class="num">Known cost</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.provider }}</td><td class="mono">{{ row.model }}</td><td class="num">{{ row.turns }}</td><td class="num mono">${{ row.cost|floatformat:6 }}</td></tr>{% empty %}<tr><td class="empty" colspan="4">The current logs do not contain pricing information yet.</td></tr>{% endfor %}</tbody></table></div></article>
 {% endblock %}
 {% block scripts %}
 <script>

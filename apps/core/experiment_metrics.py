@@ -6,9 +6,11 @@ import json
 import re
 
 from django.conf import settings
+from django.db.models import Count, Max, Prefetch, Q
 
+from apps.findings.models import Finding
 from apps.ingestion.models import RawEvent
-from apps.traces.models import Session, ToolCall
+from apps.traces.models import Session, Span, ToolCall, Turn
 
 AB_SCENARIOS = [
     {
@@ -53,6 +55,139 @@ SCENARIO_BY_PROFILE = {scenario["profile"]: scenario for scenario in AB_SCENARIO
 SCENARIO_BY_LABEL = {scenario["label"]: scenario for scenario in AB_SCENARIOS}
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 DISPLAY_ONLY_TOOLS = frozenset({"show_workflow", "show_workflows"})
+_EXPERIMENT_CACHE: dict[tuple, list[dict]] = {}
+_EXPERIMENT_BASE_CACHE: dict[tuple, tuple[list[Session], dict[str, dict], dict[str, list[ToolCall]]]] = {}
+
+
+def _experiment_signature(since=None, platform_q: Q | None = None) -> tuple:
+    sessions_qs = Session.objects.all()
+    if since is not None:
+        sessions_qs = sessions_qs.filter(started_at__gte=since)
+    if platform_q:
+        sessions_qs = sessions_qs.filter(platform_q)
+    sessions = sessions_qs.aggregate(count=Count("id"), newest=Max("started_at"))
+    calls = ToolCall.objects.aggregate(count=Count("span_id"))
+    events = RawEvent.objects.aggregate(count=Count("id"), newest=Max("occurred_at"))
+    return (
+        sessions["count"] or 0,
+        sessions["newest"],
+        calls["count"] or 0,
+        events["count"] or 0,
+        events["newest"],
+    )
+
+
+def _experiment_candidate_ids(base_qs) -> list:
+    """Cheap first pass: find which sessions belong to an A/B/C/D experiment scenario using only
+    inexpensive fields — `Session.metadata`, the `mcp.list_tools.completed` RawEvent payload, and
+    `Turn.question` text (all plain columns/small JSON, no ToolCall payloads).
+
+    This intentionally skips the tool-call-argument/result marker-text fallback that
+    `_scenario_for_session` also supports: decoding every ToolCall's `arguments`/`result` JSON for
+    all sessions just to look for a handful of matches is exactly the cost we're avoiding (that
+    JSON decode is the dominant cost of this page — see the profiling notes in `views.py`). On the
+    current dataset every real experiment session is tagged via metadata or the list_tools raw
+    event, so this fast path is exhaustive in practice; a session whose *only* signal is a marker
+    buried inside a tool call's JSON body (never observed here) would not be picked up.
+    """
+    light_sessions = list(
+        base_qs
+        .only("id", "external_session_id", "metadata")
+        .prefetch_related(
+            Prefetch("turns", queryset=Turn.objects.only("id", "session_id", "question")),
+        )
+    )
+    raw_list_tools = _list_tools_payloads_for_sessions(light_sessions)
+    return [
+        session.id
+        for session in light_sessions
+        if _scenario_for_session(session, calls=[], raw_metadata=raw_list_tools.get(session.external_session_id)) is not None
+    ]
+
+
+def _experiment_base_data(
+    signature: tuple, since=None, platform_q: Q | None = None,
+) -> tuple[list[Session], dict[str, dict], dict[str, list[ToolCall]]]:
+    cached = _EXPERIMENT_BASE_CACHE.get(signature)
+    if cached is not None:
+        return cached
+
+    base_qs = Session.objects.all()
+    if since is not None:
+        base_qs = base_qs.filter(started_at__gte=since)
+    if platform_q:
+        base_qs = base_qs.filter(platform_q)
+
+    candidate_ids = _experiment_candidate_ids(base_qs)
+
+    sessions = list(
+        Session.objects
+        .filter(id__in=candidate_ids)
+        .only(
+            "id",
+            "external_session_id",
+            "provider",
+            "model",
+            "status",
+            "started_at",
+            "ended_at",
+            "duration_ms",
+            "metadata",
+        )
+        .prefetch_related(
+            Prefetch(
+                "turns",
+                queryset=Turn.objects.only("id", "session_id", "sequence_no", "question").order_by("sequence_no"),
+            ),
+            Prefetch(
+                "spans",
+                queryset=Span.objects.only(
+                    "id",
+                    "session_id",
+                    "kind",
+                    "started_at",
+                    "ended_at",
+                    "duration_ms",
+                    "sequence_no",
+                ).order_by("started_at", "sequence_no"),
+            ),
+            Prefetch(
+                "findings",
+                queryset=Finding.objects.only("id", "session_id", "wasted_ms"),
+            ),
+        )
+        .order_by("-started_at", "-id")
+    )
+    list_tools_by_session = _list_tools_payloads_for_sessions(sessions)
+    calls_by_session: dict[str, list[ToolCall]] = defaultdict(list)
+    for call in (
+        ToolCall.objects
+        .filter(span__session__in=sessions)
+        .select_related("span")
+        .only(
+            "span_id",
+            "tool_name",
+            "arguments",
+            "result",
+            "argument_hash",
+            "is_error",
+            "span__id",
+            "span__session_id",
+            "span__kind",
+            "span__started_at",
+            "span__ended_at",
+            "span__duration_ms",
+            "span__sequence_no",
+        )
+        .order_by("span__started_at", "span__sequence_no")
+    ):
+        calls_by_session[str(call.span.session_id)].append(call)
+
+    result = (sessions, list_tools_by_session, calls_by_session)
+    if len(_EXPERIMENT_BASE_CACHE) > 4:
+        _EXPERIMENT_BASE_CACHE.clear()
+    _EXPERIMENT_BASE_CACHE[signature] = result
+    return result
 
 
 def _result_error(call: ToolCall) -> str:
@@ -200,17 +335,13 @@ def _scenario_for_session(
     return None
 
 
-def scenario_rows() -> list[dict]:
-    sessions = list(Session.objects.prefetch_related("turns", "spans").order_by("-started_at", "-id")[:500])
-    list_tools_by_session = _list_tools_payloads_for_sessions(sessions)
-    calls_by_session: dict[str, list[ToolCall]] = defaultdict(list)
-    for call in (
-        ToolCall.objects
-        .filter(span__session__in=sessions)
-        .select_related("span", "span__session")
-        .order_by("span__started_at", "span__sequence_no")
-    ):
-        calls_by_session[str(call.span.session_id)].append(call)
+def scenario_rows(since=None, platform_q: Q | None = None, active_range: str = "all", platform_key: str = "all") -> list[dict]:
+    signature = _experiment_signature(since, platform_q)
+    cache_key = ("scenario_rows", active_range, platform_key, signature)
+    if cache_key in _EXPERIMENT_CACHE:
+        return _EXPERIMENT_CACHE[cache_key]
+
+    sessions, list_tools_by_session, calls_by_session = _experiment_base_data(signature, since, platform_q)
 
     sessions_by_profile: dict[str, list[Session]] = defaultdict(list)
     for session in sessions:
@@ -305,6 +436,9 @@ def scenario_rows() -> list[dict]:
             "publishable": publishable,
             "latest_session": latest_session,
         })
+    if len(_EXPERIMENT_CACHE) > 8:
+        _EXPERIMENT_CACHE.clear()
+    _EXPERIMENT_CACHE[cache_key] = rows
     return rows
 
 
@@ -325,22 +459,20 @@ def _repeated_tool_notes(calls: list[ToolCall]) -> list[str]:
     return notes
 
 
-def experiment_run_rows(limit: int = 25, latest_per_scenario: bool = True) -> list[dict]:
-    sessions = list(
-        Session.objects
-        .prefetch_related("turns", "spans", "findings")
-        .order_by("-started_at", "-id")[:500]
-    )
-    calls_by_session: dict[str, list[ToolCall]] = defaultdict(list)
-    for call in (
-        ToolCall.objects
-        .filter(span__session__in=sessions)
-        .select_related("span", "span__session")
-        .order_by("span__started_at", "span__sequence_no")
-    ):
-        calls_by_session[str(call.span.session_id)].append(call)
+def experiment_run_rows(
+    limit: int = 25,
+    latest_per_scenario: bool = True,
+    since=None,
+    platform_q: Q | None = None,
+    active_range: str = "all",
+    platform_key: str = "all",
+) -> list[dict]:
+    signature = _experiment_signature(since, platform_q)
+    cache_key = ("experiment_run_rows", int(limit), bool(latest_per_scenario), active_range, platform_key, signature)
+    if cache_key in _EXPERIMENT_CACHE:
+        return _EXPERIMENT_CACHE[cache_key]
 
-    list_tools_by_session = _list_tools_payloads_for_sessions(sessions)
+    sessions, list_tools_by_session, calls_by_session = _experiment_base_data(signature, since, platform_q)
 
     rows = []
     seen_profiles = set()
@@ -496,6 +628,9 @@ def experiment_run_rows(limit: int = 25, latest_per_scenario: bool = True) -> li
         })
         if len(rows) >= limit:
             break
+    if len(_EXPERIMENT_CACHE) > 8:
+        _EXPERIMENT_CACHE.clear()
+    _EXPERIMENT_CACHE[cache_key] = rows
     return rows
 
 

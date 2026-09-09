@@ -10,7 +10,8 @@ import google.generativeai as genai
 from django.contrib import messages
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, F, Q, Sum
+from django.db.models import Avg, Count, Exists, F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -87,17 +88,46 @@ class SessionListView(TemplateView):
         context.update(time_ctx)
         context.update(platform_ctx)
 
+        turn_count_sq = (
+            Turn.objects
+            .filter(session_id=OuterRef("pk"))
+            .values("session_id")
+            .annotate(count=Count("id"))
+            .values("count")
+        )
+        span_count_sq = (
+            Span.objects
+            .filter(session_id=OuterRef("pk"))
+            .values("session_id")
+            .annotate(count=Count("id"))
+            .values("count")
+        )
+        tool_count_sq = (
+            Span.objects
+            .filter(session_id=OuterRef("pk"), kind="tool")
+            .values("session_id")
+            .annotate(count=Count("id"))
+            .values("count")
+        )
+        has_turns = Turn.objects.filter(session_id=OuterRef("pk"))
+        has_spans = Span.objects.filter(session_id=OuterRef("pk"))
         base_query = Session.objects.annotate(
-            turn_count=Count("turns", distinct=True),
-            span_count=Count("spans", distinct=True),
-            tool_count=Count("spans", filter=Q(spans__kind="tool"), distinct=True),
-            finding_count=Count("findings", distinct=True),
-        ).filter(Q(turn_count__gt=0) | Q(span_count__gt=0))
+            turn_count=Coalesce(Subquery(turn_count_sq, output_field=IntegerField()), 0),
+            span_count=Coalesce(Subquery(span_count_sq, output_field=IntegerField()), 0),
+            tool_count=Coalesce(Subquery(tool_count_sq, output_field=IntegerField()), 0),
+            has_turns=Exists(has_turns),
+            has_spans=Exists(has_spans),
+        ).filter(Q(has_turns=True) | Q(has_spans=True))
         if since is not None:
             base_query = base_query.filter(started_at__gte=since)
         
+        from apps.core.platform_filters import PLATFORM_MAP, PLATFORM_PRESETS
+        mcp_direct_q = PLATFORM_MAP["mcp"]["filter"]
+
         query = base_query
-        if platform_q:
+        if active_platform == "all":
+            query = query.exclude(mcp_direct_q)
+        elif platform_q:
             query = query.filter(platform_q)
             
         params = self.request.GET
@@ -113,21 +143,32 @@ class SessionListView(TemplateView):
         paginator = Paginator(query.order_by(
             F("ended_at").desc(nulls_last=True),
             F("started_at").desc(nulls_last=True),
-        ), 50)
+        ), 15)
         page_obj = paginator.get_page(params.get("page"))
         session_ids = [item.id for item in page_obj]
         spans_by_session: dict = {}
         if session_ids:
-            for span in Span.objects.filter(session_id__in=session_ids).order_by("started_at"):
+            for span in Span.objects.filter(session_id__in=session_ids).only("id", "session_id", "kind", "started_at", "ended_at", "duration_ms").order_by("started_at"):
                 spans_by_session.setdefault(span.session_id, []).append(span)
+            tool_calls_by_session: dict = {}
+            resource_tools = (
+                "build_workflow_bulk",
+                "create_workflow",
+                "create_workflow_with_ai_form",
+                "create_form_with_ai",
+                "restore_workflow_revision",
+            )
+            for call in ToolCall.objects.filter(span__session_id__in=session_ids, tool_name__in=resource_tools).select_related("span").order_by("span__started_at", "span__sequence_no"):
+                tool_calls_by_session.setdefault(call.span.session_id, []).append(call)
+            for item in page_obj:
+                item._prefetched_tool_calls = tool_calls_by_session.get(item.id, [])
 
         for item in page_obj:
             item.created_resources = session_created_resources(item)
             item.timing_breakdown = session_timing_breakdown(item, spans_by_session.get(item.id, []))
         context["page_obj"] = page_obj
         
-        from apps.core.platform_filters import PLATFORM_PRESETS
-        platform_counts = {"all": base_query.count()}
+        platform_counts = {"all": base_query.exclude(mcp_direct_q).count()}
         for p in PLATFORM_PRESETS:
             if not p.get("is_all"):
                 platform_counts[p["key"]] = base_query.filter(p["filter"]).count()
@@ -135,7 +176,13 @@ class SessionListView(TemplateView):
         context["platform_counts"] = platform_counts
         context["providers"] = Session.objects.exclude(provider="").values_list("provider", flat=True).distinct().order_by("provider")
         context["models"] = Session.objects.exclude(model="").values_list("model", flat=True).distinct().order_by("model")
-        context["tools"] = ToolCall.objects.values_list("tool_name", flat=True).distinct().order_by("tool_name")
+        context["tools"] = (
+            ToolCall.objects
+            .exclude(tool_name__startswith="mcp_server.")
+            .values_list("tool_name", flat=True)
+            .distinct()
+            .order_by("tool_name")
+        )
         context["rule_codes"] = Finding.objects.values_list("rule_code", flat=True).distinct().order_by("rule_code")
         context["active_nav"] = "sessions"
         return context
@@ -159,7 +206,6 @@ class SessionDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         session = self.object
-        context["created_resources"] = session_created_resources(session)
         import requests
         try:
             resp = requests.get("http://host.docker.internal:11434/api/tags", timeout=2)
@@ -167,8 +213,23 @@ class SessionDetailView(DetailView):
         except Exception:
             ollama_models = [{"id": "qwen2.5:7b", "name": "qwen2.5:7b (Offline)"}]
         context["ollama_models"] = ollama_models
-        spans = list(session.spans.select_related("parent", "turn", "tool_call", "external_call", "model_step").order_by("started_at", "sequence_no"))
-        origin = session.started_at or next((span.started_at for span in spans if span.started_at), None)
+        resource_tools = (
+            "build_workflow_bulk",
+            "create_workflow",
+            "create_workflow_with_ai_form",
+            "create_form_with_ai",
+            "restore_workflow_revision",
+        )
+        session._prefetched_tool_calls = list(
+            ToolCall.objects.filter(span__session=session, tool_name__in=resource_tools).select_related("span")
+        )
+        context["created_resources"] = session_created_resources(session)
+        all_spans = list(session.spans.select_related("parent", "turn", "external_call", "model_step").order_by("started_at", "sequence_no"))
+        display_spans = [
+            span for span in all_spans
+            if not (span.kind == "tool" and span.name.startswith("mcp_server."))
+        ]
+        origin = session.started_at or next((span.started_at for span in display_spans if span.started_at), None)
         waterfall = []
         measured_total = max(
             (
@@ -176,35 +237,57 @@ class SessionDetailView(DetailView):
                 if origin and span.ended_at
                 else float(span.duration_ms or 0)
             )
-            for span in spans
-        ) if spans else 0
+            for span in display_spans
+        ) if display_spans else 0
         total = max(float(session.duration_ms or measured_total or 1), 1)
-        for span in spans:
+        waterfall_spans = display_spans[:100]
+        for span in waterfall_spans:
             offset = (span.started_at - origin).total_seconds() * 1000 if origin and span.started_at else 0
             waterfall.append({"span": span, "offset_pct": max(offset / total * 100, 0), "width_pct": max(float(span.duration_ms or 1) / total * 100, .35)})
         context["waterfall"] = waterfall
-        request_ids = {span.request_id for span in spans if span.request_id}
+        context["waterfall_total_count"] = len(display_spans)
+        context["internal_span_count"] = len(all_spans) - len(display_spans)
+        children_by_parent = {}
+        top_level_spans = []
+
+        for span in display_spans:
+            if span.parent_id:
+                children_by_parent.setdefault(span.parent_id, []).append(span)
+            else:
+                top_level_spans.append(span)
+
+        def collect_descendants(items):
+            collected = list(items)
+            stack = list(items)
+            while stack:
+                current = stack.pop()
+                children = children_by_parent.get(current.id, [])
+                collected.extend(children)
+                stack.extend(children)
+            return collected
+
         raw_events_by_request: dict[str, list[dict]] = {}
-        if request_ids:
-            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at", "id"):
+
+        def load_raw_events_for(visible_spans):
+            request_ids = {span.request_id for span in visible_spans if span.request_id}
+            if not request_ids:
+                return
+            for event in RawEvent.objects.filter(
+                payload__session_id=session.external_session_id,
+                payload__request_id__in=list(request_ids),
+            ).order_by("occurred_at", "id"):
                 request_id = event.payload.get("request_id")
                 if request_id in request_ids:
                     raw_events_by_request.setdefault(request_id, []).append(event.payload)
+
+        def build_op_card(s):
+            child_spans = children_by_parent.get(s.id, [])
+            child_cards = [build_op_card(c) for c in child_spans]
+            return operation_card(s, raw_events_by_request.get(s.request_id), child_cards)
+
         if session.turns.exists():
             operations_by_turn = {}
-            children_by_parent = {}
-            top_level_spans = []
-            
-            for span in spans:
-                if span.parent_id:
-                    children_by_parent.setdefault(span.parent_id, []).append(span)
-                else:
-                    top_level_spans.append(span)
-                    
-            def build_op_card(s):
-                child_spans = children_by_parent.get(s.id, [])
-                child_cards = [build_op_card(c) for c in child_spans]
-                return operation_card(s, raw_events_by_request.get(s.request_id), child_cards)
+            load_raw_events_for(display_spans)
 
             for span in top_level_spans:
                 if span.turn_id:
@@ -217,20 +300,31 @@ class SessionDetailView(DetailView):
             all_unassigned = [
                 build_op_card(span) for span in top_level_spans if not span.turn_id
             ]
+            op_paginator = Paginator(all_unassigned, 10)
+            op_page_obj = op_paginator.get_page(self.request.GET.get("op_page"))
+            context["total_operations_count"] = len(all_unassigned)
+            context["unassigned_operations"] = op_page_obj.object_list
         else:
-            context["conversation"] = reconstruct_synthetic_turns(spans, raw_events_by_request)
-            all_unassigned = []
-        op_paginator = Paginator(all_unassigned, 50)
-        op_page_obj = op_paginator.get_page(self.request.GET.get("op_page"))
-        context["total_operations_count"] = len(all_unassigned)
-        context["unassigned_operations"] = op_page_obj.object_list
+            context["conversation"] = []
+            op_paginator = Paginator(top_level_spans, 10)
+            op_page_obj = op_paginator.get_page(self.request.GET.get("op_page"))
+            context["total_operations_count"] = len(top_level_spans)
+            load_raw_events_for(collect_descendants(op_page_obj.object_list))
+            context["unassigned_operations"] = [
+                build_op_card(span) for span in op_page_obj.object_list
+            ]
         context["operations_page_obj"] = op_page_obj
         context["findings"] = session.findings.select_related("span", "turn").order_by("-created_at")
+        raw_events_qs = RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at")
+        raw_events_paginator = Paginator(raw_events_qs, 25)
+        raw_events_page_obj = raw_events_paginator.get_page(self.request.GET.get("raw_page"))
         context["raw_events"] = [
-            {"event": event, "pretty_payload": pretty_payload(event.payload)}
-            for event in RawEvent.objects.filter(payload__session_id=session.external_session_id).order_by("occurred_at")
+            {"event": event, "pretty_payload": pretty_payload(event.payload, max_chars=3000)}
+            for event in raw_events_page_obj.object_list
         ]
-        context["timing_breakdown"] = session_timing_breakdown(session, spans)
+        context["raw_events_page_obj"] = raw_events_page_obj
+        context["raw_events_total_count"] = raw_events_paginator.count
+        context["timing_breakdown"] = session_timing_breakdown(session, display_spans)
         context["active_nav"] = "sessions"
         return context
 
@@ -329,6 +423,10 @@ class ExperimentABCDView(TemplateView):
         context.update(time_ctx)
         context.update(platform_ctx)
         
+        # The experiment page is a benchmark view, not a live activity view.
+        # Keep the global filter context in the header, but never apply it to
+        # the ABCD dataset: a remembered 1h/24h or platform selection must not
+        # make the benchmark runs and their notes disappear.
         rows = scenario_rows()
         chart_rows = [
             {
@@ -803,14 +901,14 @@ class SessionAIAnalysisView(View):
             base = tm_dict.get(tc.tool_name, {})
             p50 = base.get("p50", 0)
             p95 = base.get("p95", 0)
-            comp = "Yok"
+            comp = "N/A"
             if p50 and tc.span.duration_ms:
                 if tc.span.duration_ms > p95:
-                    comp = "p95 sınırını aştı (Çok yavaş)"
+                    comp = "exceeded p95 (very slow)"
                 elif tc.span.duration_ms > p50:
-                    comp = f"p50'den {tc.span.duration_ms - p50:.1f}ms yavaş"
+                    comp = f"{tc.span.duration_ms - p50:.1f}ms slower than p50"
                 else:
-                    comp = "p50'den daha hızlı"
+                    comp = "faster than p50"
                     
             tool_calls_payload.append({
                 "tool": tc.tool_name,
@@ -838,38 +936,38 @@ class SessionAIAnalysisView(View):
             "findings": findings
         }
         
-        prompt = f"""Sen Jotform MCP ve Agent sistemleri için uzman bir Observability & Telemetry Analistisin.
+        prompt = f"""You are an expert Observability & Telemetry Analyst for Jotform MCP and Agent systems.
 
-GÖREV:
-Aşağıda verilen oturum telemetri verisini inceleyerek somut, verilere dayalı bir performans ve kök neden analizi sunmak.
+TASK:
+Review the session telemetry data provided below and produce a concrete, data-driven performance and root-cause analysis.
 
-ANALİZ KURALLARI:
-1. Tahmin veya varsayım yapma; sadece sağlanan log, süre ve durum kodlarına dayan.
-2. 50 ms altı süren başarısız tool çağrılarını "Hızlı Validasyon Hatası (Fast Rejection)" olarak işaretle ve tarihsel p50/p95 ortalamalarından muaf tut.
-3. Tool sürelerini tarihsel p50 (medyan) ile kıyasla.
-4. Dış API (Jotform Cloud) süresi ile yerel MCP/LLM süresini net olarak ayrıştır.
-5. Varsa finding'lerin neden oluştuğunu ve nasıl önleneceğini belirt.
+ANALYSIS RULES:
+1. Do not guess or assume; base your analysis only on the provided logs, durations, and status codes.
+2. Flag failed tool calls under 50 ms as "Fast Rejection" and exclude them from historical p50/p95 averages.
+3. Compare tool durations against their historical p50 (median).
+4. Clearly separate external API (Jotform Cloud) time from local MCP/LLM time.
+5. If findings are present, explain why they occurred and how to prevent them.
 
-ÇIKTI FORMATI (Lütfen tam olarak bu Markdown başlıklarını ve madde işaretlerini kullan):
-### ⏱️ Gecikme & Kıyaslama
-* Tool'ların geçmiş p50 değerine göre durumu (Madde imleri ile listeleyin)
+OUTPUT FORMAT (please use exactly these Markdown headings and bullet points):
+### ⏱️ Latency & Benchmarking
+* Status of each tool against its historical p50 (list as bullet points)
 
-### 🌐 Sistem & API Durumu
-* Zamanın nereye harcandığı, HTTP ve LLM süre kırılımları
+### 🌐 System & API Status
+* Where time was spent, HTTP vs. LLM duration breakdown
 
-### ⚠️ Anomali & Validasyon
-* Varsa hızlı hatalar, gereksiz tekrarlar veya açık finding'ler
+### ⚠️ Anomalies & Validation
+* Any fast-rejection errors, redundant retries, or open findings
 
-### 💡 Mühendislik Önerisi
-* Somut olarak neyin optimize edilmesi gerektiği
+### 💡 Engineering Recommendation
+* What should concretely be optimized
 
 PAYLOAD:
 {json.dumps(payload, indent=2, ensure_ascii=False)}
 """
-        
+
         user_question = request.GET.get("question", "").strip()
         if user_question:
-            prompt += f"\n\nKULLANICI ÖZEL SORUSU:\n{user_question}\n(Lütfen analizine ek olarak bu soruya da spesifik bir yanıt ver.)"
+            prompt += f"\n\nUSER'S SPECIFIC QUESTION:\n{user_question}\n(Please also give a specific answer to this question in addition to your analysis.)"
 
 
         selected_model = request.GET.get("model", "qwen2.5:7b").strip() or "qwen2.5:7b"
@@ -889,7 +987,7 @@ PAYLOAD:
             md_text = resp.json().get("response", "")
             html_content = markdown.markdown(md_text, extensions=['fenced_code', 'tables'])
         except Exception as e:
-            html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Ollama Bağlantı Hatası ({selected_model}):</strong> {e} <br><em>İpucu: 'ollama run {selected_model}' komutunun çalıştığından emin olun.</em></div>"
+            html_content = f"<div class='notice error' style='margin-bottom:0;'><strong>Ollama Connection Error ({selected_model}):</strong> {e} <br><em>Tip: make sure 'ollama run {selected_model}' is running.</em></div>"
 
         return HttpResponse(html_content)
 class FeatureRequestsView(TemplateView):

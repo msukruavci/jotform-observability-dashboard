@@ -5,35 +5,35 @@
   <div><p class="eyebrow">Trace explorer</p><h1>Sessions</h1><p>Inspect conversations and direct MCP tool/API activity by LLM platform.</p></div>
   {% if active_time_label %}
   <div class="page-head-actions">
-    <span class="active-time-badge" title="Filtrelenen Zaman">⏱️ {{ active_time_label }}</span>
+    <span class="active-time-badge" title="Filtered range">⏱️ {{ active_time_label }}</span>
   </div>
   {% endif %}
 </div>
 
-<div class="platform-tabs" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;" role="tablist" aria-label="Filter by LLM platform">
-  <a class="platform-tab {% if active_platform == 'all' %}active{% endif %}" href="?{% if request.GET.range %}range={{ request.GET.range }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.tool %}tool={{ request.GET.tool }}&{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'all' %}var(--accent, #ff6100){% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'all' %}#fff{% else %}var(--text-secondary, #c9d1d9){% endif %};">
+<div class="platform-tabs" role="tablist" aria-label="Filter by LLM platform">
+  <a class="platform-tab {% if active_platform == 'all' %}active{% endif %}" href="?{% if request.GET.range %}range={{ request.GET.range }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.tool %}tool={{ request.GET.tool }}&{% endif %}">
     <span>🌟 All</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.all }}</span>
+    <span class="platform-tab-count">{{ platform_counts.all }}</span>
   </a>
-  <a class="platform-tab {% if active_platform == 'claude' %}active{% endif %}" href="?platform=claude{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'claude' %}#d97706{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'claude' %}#fff{% else %}#f59e0b{% endif %};">
+  <a class="platform-tab {% if active_platform == 'claude' %}active{% endif %}" href="?platform=claude{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="--tab-accent:#d97706; --tab-text:#f59e0b;">
     <span>🟣 Claude (Anthropic)</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.claude }}</span>
+    <span class="platform-tab-count">{{ platform_counts.claude }}</span>
   </a>
-  <a class="platform-tab {% if active_platform == 'gemini' %}active{% endif %}" href="?platform=gemini{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'gemini' %}#2563eb{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'gemini' %}#fff{% else %}#3b82f6{% endif %};">
+  <a class="platform-tab {% if active_platform == 'gemini' %}active{% endif %}" href="?platform=gemini{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="--tab-accent:#2563eb; --tab-text:#3b82f6;">
     <span>🔵 Gemini (Google)</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.gemini }}</span>
+    <span class="platform-tab-count">{{ platform_counts.gemini }}</span>
   </a>
-  <a class="platform-tab {% if active_platform == 'gpt' %}active{% endif %}" href="?platform=gpt{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'gpt' %}#16a34a{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'gpt' %}#fff{% else %}#22c55e{% endif %};">
+  <a class="platform-tab {% if active_platform == 'gpt' %}active{% endif %}" href="?platform=gpt{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="--tab-accent:#16a34a; --tab-text:#22c55e;">
     <span>🟢 ChatGPT / GPT</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.gpt }}</span>
+    <span class="platform-tab-count">{{ platform_counts.gpt }}</span>
   </a>
-  <a class="platform-tab {% if active_platform == 'mcp' %}active{% endif %}" href="?platform=mcp{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'mcp' %}#64748b{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'mcp' %}#fff{% else %}#94a3b8{% endif %};">
+  <a class="platform-tab {% if active_platform == 'mcp' %}active{% endif %}" href="?platform=mcp{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="--tab-accent:#64748b; --tab-text:#94a3b8;">
     <span>⚙️ MCP Direct</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.mcp }}</span>
+    <span class="platform-tab-count">{{ platform_counts.mcp }}</span>
   </a>
-  <a class="platform-tab {% if active_platform == 'test' %}active{% endif %}" href="?platform=test{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-size: 0.88rem; font-weight: 600; border: 1px solid var(--border-color, #2d313e); background: {% if active_platform == 'test' %}#dc2626{% else %}var(--bg-surface, #1e2029){% endif %}; color: {% if active_platform == 'test' %}#fff{% else %}#f87171{% endif %};">
+  <a class="platform-tab {% if active_platform == 'test' %}active{% endif %}" href="?platform=test{% if request.GET.range %}&range={{ request.GET.range }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.tool %}&tool={{ request.GET.tool }}{% endif %}" style="--tab-accent:#dc2626; --tab-text:#f87171;">
     <span>🧪 Tests / CI</span>
-    <span style="background: rgba(0,0,0,0.25); padding: 1px 7px; border-radius: 999px; font-size: 0.75rem;">{{ platform_counts.test }}</span>
+    <span class="platform-tab-count">{{ platform_counts.test }}</span>
   </a>
 </div>
 

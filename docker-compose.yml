@@ -32,6 +32,8 @@ services:
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --reload
     ports:
       - "8090:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - .:/app
       - ../jotform-workflow-mcp:/data/mcp:ro

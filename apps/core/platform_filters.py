@@ -10,7 +10,7 @@ from django.http import HttpRequest
 PLATFORM_PRESETS = [
     {
         "key": "all",
-        "label": "Tümü",
+        "label": "All",
         "icon": "🌟",
         "badge_bg": "var(--surface)",
         "badge_color": "var(--muted)",

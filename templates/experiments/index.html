@@ -9,7 +9,7 @@
   </div>
 </div>
 
-<div class="metric-grid">
+<div class="metric-grid stagger">
   <article class="metric-card accent"><p>Completed runs <span>#</span></p><strong>{{ summary.completed_runs }}</strong><small>{{ summary.profiles_ready }}/4 profiles with data</small></article>
   <article class="metric-card"><p>Avg first build <span>ms</span></p><strong>{{ summary.avg_first_build_ms|floatformat:0 }}</strong><small>successful build_workflow_bulk only</small></article>
   <article class="metric-card"><p>Findings <span>!</span></p><strong>{{ summary.total_findings }}</strong><small>{{ summary.total_finding_wasted_ms|floatformat:0 }} ms flagged</small></article>
@@ -60,7 +60,7 @@
     <div><p class="eyebrow">Latest runs</p><h2>Individual test results</h2></div>
   </div>
   <div class="table-wrap">
-    <table>
+    <table class="data-grid">
       <thead>
         <tr>
           <th>Run</th><th>Workflow</th><th class="num">Session</th><th class="num">First build</th><th class="num">Final build</th><th class="num">To first</th><th class="num">To final</th><th class="num">Post-first</th><th class="num">Builds</th><th class="num">Abandoned</th><th class="num">Tools</th><th class="num">API</th>
@@ -125,7 +125,7 @@
     <div><p class="eyebrow">Run plan</p><h2>Scenario prompts and flags</h2></div>
   </div>
   <div class="table-wrap">
-    <table>
+    <table class="data-grid">
       <thead><tr><th>Scenario</th><th>Profile</th><th>Marker</th><th>Template</th><th>Gap inspection</th><th>Prompt</th><th>Env label</th></tr></thead>
       <tbody>
       {% for row in rows %}
@@ -149,7 +149,7 @@
     <div><p class="eyebrow">Results</p><h2>Scenario metrics</h2></div>
   </div>
   <div class="table-wrap">
-    <table>
+    <table class="data-grid">
       <thead>
         <tr>
           <th>Scenario</th><th class="num">Runs</th><th class="num">Avg session</th><th class="num">Avg first build</th><th class="num">Avg final build</th><th class="num">Avg to first</th><th class="num">Avg to final</th><th class="num">Avg post-first</th><th class="num">Tool calls</th><th class="num">API calls</th>
